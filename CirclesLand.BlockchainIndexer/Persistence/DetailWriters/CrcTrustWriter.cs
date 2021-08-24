@@ -17,7 +17,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
                       transaction_id
                     , address
                     , can_send_to
-                    , limit
+                    , ""limit""
                 ) values (
                     @transaction_id, @address, @can_send_to, @limit      
                 )

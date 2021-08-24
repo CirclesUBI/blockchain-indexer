@@ -30,22 +30,24 @@ namespace CirclesLand.BlockchainIndexer
         /// </summary>
         public readonly Source<HexBigInteger, NotUsed> BlockSource = 
             Source.UnfoldAsync(new HexBigInteger(0), async lastBlock =>
-        {
-            while (true)
             {
-                await Task.Delay(500);
-
-                var currentBlock = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
-                if (currentBlock == lastBlock)
-                {
-                    continue;
-                }
                 
-                Console.WriteLine($"Found new block: {currentBlock}");
+                
+                while (true)
+                {
+                    await Task.Delay(500);
 
-                return new Option<(HexBigInteger, HexBigInteger)>((currentBlock, currentBlock));
-            }
-        });
+                    var currentBlock = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+                    if (currentBlock == lastBlock)
+                    {
+                        continue;
+                    }
+                
+                    Console.WriteLine($"Found new block: {currentBlock}");
+
+                    return new Option<(HexBigInteger, HexBigInteger)>((currentBlock, currentBlock));
+                }
+            });
 
         public void Start()
         {
@@ -113,12 +115,16 @@ namespace CirclesLand.BlockchainIndexer
                     {
                         Console.WriteLine($"    Tx {o.Transaction.TransactionIndex}: Not classified.");
                     }
+                    else if (o.Classification == TransactionClass.Call)
+                    {
+                        Console.WriteLine($"    Tx {o.Transaction.TransactionIndex}: is a Call without state changes.");
+                    }
                     else
                     {
                         Console.WriteLine($"    Tx {o.Transaction.TransactionIndex}: {o.Classification}");
                     }
                     
-                    return !isUnknown;
+                    return !isUnknown && o.Classification != TransactionClass.Call;
                 })
                 
                 // Add the details for each transaction

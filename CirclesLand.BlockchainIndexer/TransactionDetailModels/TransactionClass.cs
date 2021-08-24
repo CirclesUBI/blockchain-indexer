@@ -18,6 +18,7 @@ namespace CirclesLand.BlockchainIndexer.TransactionDetailModels
         InitialSafeFunding = 512,
         GnosisSafeEthTransfer = 1024,
         ContractCreation = 2048,
-        SafeCreation = 4096
+        SafeCreation = 4096,
+        Call = 8192
     }
 }

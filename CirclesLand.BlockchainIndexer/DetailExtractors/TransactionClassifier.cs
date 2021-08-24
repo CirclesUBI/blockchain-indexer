@@ -24,9 +24,13 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             {
                 return TransactionClass.ContractCreation;
             }
-            if (logs.Count == 0)
+            if (logs.Count == 0 && transaction.Value.Value > 0)
             {
-                return externalClasses ?? TransactionClass.Unknown | TransactionClass.EoaEthTransfer;
+                return (externalClasses ?? TransactionClass.Unknown) | TransactionClass.EoaEthTransfer;
+            }
+            if (logs.Count == 0 && transaction.Value.Value == 0)
+            {
+                return (externalClasses ?? TransactionClass.Unknown) | TransactionClass.Call;
             }
 
             var transactionClass = TransactionClass.Unknown;
