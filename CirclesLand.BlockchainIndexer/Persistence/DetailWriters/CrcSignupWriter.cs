@@ -15,7 +15,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             const string InsertCrcSignupSql = @"
                 insert into crc_signup (
                       transaction_id
-                    , user
+                    , ""user""
                     , token
                 ) values (
                     @transaction_id, @user, @token

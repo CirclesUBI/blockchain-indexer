@@ -11,6 +11,7 @@ using Akka.Util;
 using CirclesLand.BlockchainIndexer.DetailExtractors;
 using CirclesLand.BlockchainIndexer.Persistence;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
+using Dapper;
 using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
 using Nethereum.Hex.HexTypes;
 using Nethereum.Web3;
@@ -31,19 +32,37 @@ namespace CirclesLand.BlockchainIndexer
         public readonly Source<HexBigInteger, NotUsed> BlockSource = 
             Source.UnfoldAsync(new HexBigInteger(0), async lastBlock =>
             {
-                
+                await using var connection = new NpgsqlConnection(ConnectionString);
+                connection.Open();
                 
                 while (true)
                 {
+                    // Determine if we need to catch up (database old)
+                    var currentBlock = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+                    var lastIndexedBlock = connection.QuerySingleOrDefault<long?>("select max(number) from block") ?? 0;
+                    if (lastBlock.Value == 0)
+                    {
+                        lastBlock = new HexBigInteger(lastIndexedBlock == 0 ? 12540000 : lastIndexedBlock);
+                        // lastBlock = new HexBigInteger(lastIndexedBlock == 0 ? 12529458 : lastIndexedBlock);
+                    }
+                    
+                    if (currentBlock.ToLong() > lastIndexedBlock && currentBlock.Value > lastBlock.Value)
+                    {
+                        var nextBlockToIndex = lastBlock.Value + 1;
+                        Console.WriteLine($"Catching up block: {nextBlockToIndex}");
+                        
+                        return new Option<(HexBigInteger, HexBigInteger)>((new HexBigInteger(nextBlockToIndex), new HexBigInteger(nextBlockToIndex)));
+                    }
+                    
                     await Task.Delay(500);
 
-                    var currentBlock = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
+                    // At this point we wait for a new block
+                    currentBlock = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
                     if (currentBlock == lastBlock)
                     {
                         continue;
                     }
-                
-                    Console.WriteLine($"Found new block: {currentBlock}");
+                    Console.WriteLine($"Got new block: {currentBlock}");
 
                     return new Option<(HexBigInteger, HexBigInteger)>((currentBlock, currentBlock));
                 }
@@ -59,7 +78,7 @@ namespace CirclesLand.BlockchainIndexer
                     
                 // Buffer up to 25 block nos. in case that the downstream processing is not fast enough.
                 // When the buffer size is exceeded the whole stream will fail.
-                .Buffer(25, OverflowStrategy.Fail)
+                // .Buffer(25, OverflowStrategy.Fail) // TODO: This doesn't suite to "catch up" mode
                 
                 // Get the full block with all transactions
                 .SelectAsync(1, currentBlockNo => 
@@ -74,6 +93,7 @@ namespace CirclesLand.BlockchainIndexer
 
                     return block.Transactions
                         .Select(o => (
+                            TotalTransactionsInBlock: block.Transactions.Length,
                             Timestamp: block.Timestamp,
                             Transaction: o));
                 })
@@ -85,6 +105,7 @@ namespace CirclesLand.BlockchainIndexer
                         timestampAndTransaction.Transaction.TransactionHash);
                     
                     return (
+                        TotalTransactionsInBlock: timestampAndTransaction.TotalTransactionsInBlock,
                         Timestamp: timestampAndTransaction.Timestamp,
                         Transaction: timestampAndTransaction.Transaction,
                         Receipt: receipt
@@ -100,6 +121,7 @@ namespace CirclesLand.BlockchainIndexer
                         null);
                     
                     return (
+                        TotalTransactionsInBlock: transactionAndReceipt.TotalTransactionsInBlock,
                         Timestamp: transactionAndReceipt.Timestamp,
                         Transaction: transactionAndReceipt.Transaction,
                         Receipt: transactionAndReceipt.Receipt,
@@ -107,24 +129,31 @@ namespace CirclesLand.BlockchainIndexer
                     );
                 })
                 
-                // Filter all unclassified transactions
-                .Where(o =>
+                // Set a flag which indicates whether to store the transaction or not
+                .Select(transactionAndReceipt =>
                 {
-                    var isUnknown = o.Classification == TransactionClass.Unknown;
+                    var isUnknown = transactionAndReceipt.Classification == TransactionClass.Unknown;
                     if (isUnknown)
                     {
-                        Console.WriteLine($"    Tx {o.Transaction.TransactionIndex}: Not classified.");
+                        Console.WriteLine($"    Tx {transactionAndReceipt.Transaction.TransactionIndex}: Not classified.");
                     }
-                    else if (o.Classification == TransactionClass.Call)
+                    else if (transactionAndReceipt.Classification == TransactionClass.Call)
                     {
-                        Console.WriteLine($"    Tx {o.Transaction.TransactionIndex}: is a Call without state changes.");
+                        Console.WriteLine($"    Tx {transactionAndReceipt.Transaction.TransactionIndex}: is a Call without state changes.");
                     }
                     else
                     {
-                        Console.WriteLine($"    Tx {o.Transaction.TransactionIndex}: {o.Classification}");
+                        Console.WriteLine($"    Tx {transactionAndReceipt.Transaction.TransactionIndex}: {transactionAndReceipt.Classification}");
                     }
                     
-                    return !isUnknown && o.Classification != TransactionClass.Call;
+                    return (
+                        TotalTransactionsInBlock: transactionAndReceipt.TotalTransactionsInBlock,
+                        Timestamp: transactionAndReceipt.Timestamp,
+                        Transaction: transactionAndReceipt.Transaction,
+                        Receipt: transactionAndReceipt.Receipt,
+                        Classification: transactionAndReceipt.Classification,
+                        ShouldBeIndexed: !isUnknown && transactionAndReceipt.Classification != TransactionClass.Call
+                    );
                 })
                 
                 // Add the details for each transaction
@@ -137,11 +166,13 @@ namespace CirclesLand.BlockchainIndexer
                         .ToArray();
                     
                     return (
+                        TotalTransactionsInBlock: classifiedTransactions.TotalTransactionsInBlock,
                         TxHash: classifiedTransactions.Transaction.TransactionHash,
                         Timestamp: classifiedTransactions.Timestamp,
                         Transaction: classifiedTransactions.Transaction,
                         Receipt: classifiedTransactions.Receipt,
                         Classification: classifiedTransactions.Classification,
+                        SholdBeIndexed: classifiedTransactions.ShouldBeIndexed,
                         Details: extractedDetails
                     );
                 })
@@ -164,14 +195,19 @@ namespace CirclesLand.BlockchainIndexer
                             blockTimestamp).UtcDateTime;
 
                         var transactionId = new TransactionWriter(connection, transaction).Write(
+                            !transactionWithExtractedDetails.SholdBeIndexed,
+                            transactionWithExtractedDetails.TotalTransactionsInBlock,
                             blockTimestampDateTime,
                             transactionWithExtractedDetails.Classification,
                             transactionWithExtractedDetails.Transaction,
                             transactionWithExtractedDetails.Details);
 
-                        var detailIds = new TransactionDetailWriter(connection, transaction).Write(
-                            transactionId,
-                            transactionWithExtractedDetails.Details);
+                        if (transactionId != null)
+                        {
+                            var detailIds = new TransactionDetailWriter(connection, transaction).Write(
+                                transactionId.Value,
+                                transactionWithExtractedDetails.Details);
+                        }
 
                         transaction.Commit();
                         

@@ -9,7 +9,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
         public const string AddressEmptyBytesPrefix = "0x000000000000000000000000";
         public const string CrcHubTransferEventTopic = "0x8451019aab65b4193860ef723cb0d56b475a26a72b7bfc55c1dbd6121015285a";
         public const string CrcTrustEventTopic = "0xe60c754dd8ab0b1b5fccba257d6ebcd7d09e360ab7dd7a6e58198ca1f57cdcec";
-        public const string Erc20TransferEventTopic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+        public const string TransferEventTopic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
         public const string CrcSignupEventTopic = "0x358ba8f768af134eb5af120e9a61dc1ef29b29f597f047b555fc3675064a0342";
         public const string GnosisSafeOwnerAddedTopic = "";
         public const string CrcOrganisationSignupEventTopic = "0xb0b94cff8b84fc67513b977d68a5cdd67550bd9b8d99a34b570e3367b7843786";
@@ -49,18 +49,18 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                 transactionClass |= TransactionClass.CrcTrust;
             }
             if (logs.FirstOrDefault(log
-                => log.SelectToken("topics").Values<string>().Contains(Erc20TransferEventTopic)
+                => log.SelectToken("topics").Values<string>().Contains(TransferEventTopic)
                    && log.SelectToken("topics").Values<string>().Contains(EmptyUInt256)) != null)
             {
                 transactionClass |= TransactionClass.TokenMinting;
             }
-            else if (flatTopics.Contains(Erc20TransferEventTopic))
+            else if (flatTopics.Contains(TransferEventTopic))
             {
                 transactionClass |= TransactionClass.Erc20Transfer;
             }
             if (flatTopics.Contains(CrcSignupEventTopic) 
                 && flatTopics.Contains(CrcTrustEventTopic) 
-                && flatTopics.Contains(Erc20TransferEventTopic))
+                && flatTopics.Contains(TransferEventTopic))
             {
                 transactionClass |= TransactionClass.CrcSignup;
             }

@@ -2,7 +2,8 @@ create table block (
     number bigserial primary key,
     hash text not null unique ,
     timestamp timestamp not null,
-    is_complete bool not null 
+    total_transaction_count int not null,
+    indexed_transaction_count int not null 
 );
 
 create index idx_block_timestamp on block(timestamp) include (number);

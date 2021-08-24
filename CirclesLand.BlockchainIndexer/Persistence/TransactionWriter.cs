@@ -41,7 +41,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
             _dbTransaction = dbTransaction;
         }
         
-        public long Write(DateTime blockTimestamp, TransactionClass transactionClass, Transaction transaction, IEnumerable<IDetail> details)
+        public long? Write(bool blockOnly, int totalTransactionCount, DateTime blockTimestamp, TransactionClass transactionClass, Transaction transaction, IEnumerable<IDetail> details)
         {
             var existingBlock = _connection.QuerySingleOrDefault<long>(
                 "select number from block where number = @number;",
@@ -53,15 +53,29 @@ namespace CirclesLand.BlockchainIndexer.Persistence
             if (existingBlock == 0)
             {
                 _connection.Execute(
-                    @"insert into block (number, hash, timestamp, is_complete) 
-                         values (@number, @hash, @timestamp, @is_complete);", new
+                    @"insert into block (number, hash, timestamp, total_transaction_count, indexed_transaction_count) 
+                         values (@number, @hash, @timestamp, @total_transaction_count, @indexed_transaction_count);", new
                     {
                         number = transaction.BlockNumber.ToLong(),
                         hash = transaction.BlockHash,
                         timestamp = blockTimestamp,
-                        is_complete = false
+                        total_transaction_count = totalTransactionCount,
+                        indexed_transaction_count = 0
                     }, _dbTransaction);
             }
+
+            if (blockOnly)
+            {
+                _connection.Execute(
+                    @"update block set 
+                        indexed_transaction_count = indexed_transaction_count + 1 
+                     where number = @number;", new
+                    {
+                        number = transaction.BlockNumber.ToLong()
+                    }, _dbTransaction);
+                
+                return null;
+            } 
             
             var existingTransactionId = _connection.QuerySingleOrDefault<long>(
                 "select \"id\" from \"transaction\" where \"hash\" = @transaction_hash;",new
@@ -106,7 +120,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 returning Id;
             ";
 
-            return _connection.QuerySingle<long>(InsertTransactionSql, new
+            var transactionId = _connection.QuerySingle<long>(InsertTransactionSql, new
             {
                 block_number = transaction.BlockNumber.ToLong(),
                 from = transaction.From,
@@ -120,6 +134,16 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 input = transaction.Input,
                 classification = classificationArray
             });
+            
+            _connection.Execute(
+                @"update block set 
+                        indexed_transaction_count = indexed_transaction_count + 1 
+                     where number = @number;", new
+                {
+                    number = transaction.BlockNumber.ToLong()
+                }, _dbTransaction);
+            
+            return transactionId;
         }
     }
 }

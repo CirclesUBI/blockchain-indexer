@@ -12,14 +12,14 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
         public static IEnumerable<IDetail> Extract(Transaction transactionData, TransactionReceipt receipt)
         {
             var erc20Logs = receipt.Logs
-                .Where(o => o.SelectToken("topics").Values<string>().Contains(TransactionClassifier.Erc20TransferEventTopic))
+                .Where(o => o.SelectToken("topics").Values<string>().Contains(TransactionClassifier.TransferEventTopic))
                 .ToArray();
 
             if (!erc20Logs.Any())
             {
                 throw new Exception("The supplied transaction is not a valid CRC 'transfer' " +
                                     "transaction because it misses a log entry with " +
-                                    $"topic {TransactionClassifier.Erc20TransferEventTopic}.");
+                                    $"topic {TransactionClassifier.TransferEventTopic}.");
             }
 
             foreach (var erc20Log in erc20Logs)
