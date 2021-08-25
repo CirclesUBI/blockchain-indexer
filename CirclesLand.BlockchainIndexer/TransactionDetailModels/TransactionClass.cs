@@ -10,6 +10,8 @@ namespace CirclesLand.BlockchainIndexer.TransactionDetailModels
         CrcSignup = 2,
         CrcOrganisationSignup = 4,
         CrcHubTransfer = 8,
-        CrcTrust = 16
+        CrcTrust = 16,
+        EoaEthTransfer = 32,
+        SafeEthTransfer = 64
     }
 }

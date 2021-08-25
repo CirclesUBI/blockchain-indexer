@@ -1,7 +1,6 @@
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
-using Nethereum.Hex.HexTypes;
 using Nethereum.RPC.Eth.DTOs;
 
 namespace CirclesLand.BlockchainIndexer.DetailExtractors
@@ -10,29 +9,23 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
     {
         public static IEnumerable<IDetail> Extract(Transaction transactionData, TransactionReceipt receipt)
         {
-            var logs = receipt.Logs;
-            var hubTransferEvent = logs
-                .Where(o => o.SelectToken("topics").Values<string>().Contains(TransactionClassifier.CrcHubTransferEventTopic))
-                .ToArray();
+            var isHubTransfer = TransactionClassifier.IsCrcHubTransfer(
+                receipt,
+                out var from,
+                out var to,
+                out var amount);
 
-            return hubTransferEvent.Select(o =>
+            if (!isHubTransfer || from == null || to == null || amount == null)
             {
-                var topics = o.SelectToken("topics").Values<string>().ToArray();
-                var from = topics[1]
-                    .Replace(TransactionClassifier.AddressEmptyBytesPrefix, "0x");
+                throw new Exception("The supplied transaction and receipt is not a CrcHubTransfer.");
+            }
 
-                var to = topics[2]
-                    .Replace(TransactionClassifier.AddressEmptyBytesPrefix, "0x");
-
-                var value = new HexBigInteger(o.Value<string>("data"));
-
-                return new CrcHubTransfer
-                {
-                    From = from,
-                    To = to,
-                    Value = value.ToString()
-                };
-            });
+            yield return new CrcHubTransfer
+            {
+                From = from,
+                To = to,
+                Value = amount.ToString()
+            };
         }
     }
 }

@@ -34,6 +34,14 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             {
                 details.AddRange(CrcOrganisationSignupDetailExtractor.Extract(transactionData, transactionReceipt));
             }
+            if (transactionClass.HasFlag(TransactionClass.EoaEthTransfer))
+            {
+                details.AddRange(EthTransferDetailExtractor.Extract(transactionData, transactionReceipt));
+            }
+            if (transactionClass.HasFlag(TransactionClass.SafeEthTransfer))
+            {
+                details.AddRange(GnosisSafeEthTransferDetailExtractor.Extract(transactionData, transactionReceipt));
+            }
 
             return details.ToImmutableArray();
         }

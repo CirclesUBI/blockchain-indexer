@@ -10,16 +10,17 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             NpgsqlConnection connection, 
             NpgsqlTransaction? dbTransaction, 
             long transactionId, 
-            EthTransfer data)
+            GnosisSafeEthTransfer data)
         {
             const string InsertGnosisSafeEthTransferSql = @"
                 insert into gnosis_safe_eth_transfer (
                     transaction_id
+                    , initiator
                     , ""from""
                     , ""to""
                     , value
                 ) values (
-                    @transaction_id, @from, @to, @value
+                    @transaction_id, @initiator, @from, @to, @value
                 )
                 returning id;
             ";
@@ -27,6 +28,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             return connection.QuerySingle<long>(InsertGnosisSafeEthTransferSql, new
             {
                 transaction_id = transactionId,
+                initiator = data.Initiator,
                 from = data.From,
                 to = data.To,
                 value = data.Value

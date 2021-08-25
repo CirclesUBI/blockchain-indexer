@@ -71,6 +71,16 @@ create table eth_transfer (
     value text not null
 );
 
+create table gnosis_safe_eth_transfer (
+    id bigserial primary key,
+    transaction_id bigint not null references transaction (id),
+    initiator text not null,
+    "from" text not null,
+    "to" text not null,
+    value text not null
+);
+
+
 /*
 create table transaction_log (
     id bigserial primary key,
@@ -89,15 +99,6 @@ create table transaction_log_topic (
     transactionLogId bigint not null references transaction_log (id),
     topic text not null references log_topic (topic)
 );
-
-create table gnosis_safe_eth_transfer (
-    id bigserial primary key,
-    transaction_id bigint not null references transaction (id),
-    "from" text not null,
-    "to" text not null,
-    value text not null
-);
-
 create table transaction_message (
     id bigserial primary key,
     transaction_id bigint not null references transaction (id),

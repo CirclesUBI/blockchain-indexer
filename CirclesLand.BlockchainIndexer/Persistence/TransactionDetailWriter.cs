@@ -43,23 +43,25 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                     case EthTransfer ethTransfer:
                         detailIds.Add(Tuple.Create("EthTransfer", EthTransferWriter.Insert(_connection, _dbTransaction, transactionId, ethTransfer)));
                         break;
+                    /*
                     case TokenMinting tokenMinting:
                         detailIds.Add(Tuple.Create("TokenMinting", TokenMintingWriter.Insert(_connection, _dbTransaction, transactionId, tokenMinting)));
                         break;
-                    case CrcSignup crcSignup:
-                        detailIds.Add(Tuple.Create("CrcSignup", CrcSignupWriter.Insert(_connection, _dbTransaction, transactionId, crcSignup)));
-                        break;
                     case TransactionMessage transactionMessage:
                         detailIds.Add(Tuple.Create("TransactionMessage", TransactionMessageWriter.Insert(_connection, _dbTransaction, transactionId, transactionMessage)));
-                        break;
-                    case CrcOrganisationSignup crcOrganisationSignup:
-                        detailIds.Add(Tuple.Create("CrcOrganisationSignup", CrcOrganisationSignupWriter.Insert(_connection, _dbTransaction, transactionId, crcOrganisationSignup)));
                         break;
                     case InvitationEoa invitationEoa:
                         detailIds.Add(Tuple.Create("InvitationEoa", InvitationEoaWriter.Insert(_connection, _dbTransaction, invitationEoa)));
                         break;
                     case InvitationRedemption invitationRedemption:
                         detailIds.Add(Tuple.Create("InvitationRedemption", InvitationRedemptionWriter.Insert(_connection, _dbTransaction, transactionId, invitationRedemption)));
+                        break;
+                    */
+                    case CrcSignup crcSignup:
+                        detailIds.Add(Tuple.Create("CrcSignup", CrcSignupWriter.Insert(_connection, _dbTransaction, transactionId, crcSignup)));
+                        break;
+                    case CrcOrganisationSignup crcOrganisationSignup:
+                        detailIds.Add(Tuple.Create("CrcOrganisationSignup", CrcOrganisationSignupWriter.Insert(_connection, _dbTransaction, transactionId, crcOrganisationSignup)));
                         break;
                 }
             }

@@ -10,8 +10,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
     {
         public static IEnumerable<IDetail> Extract(Transaction transactionData, TransactionReceipt receipt)
         {
-            var logs = receipt.Logs;
-            var log = logs
+            var log = receipt.Logs
                 .FirstOrDefault(o => o.SelectToken("topics").Values<string>().Contains(TransactionClassifier.CrcOrganisationSignupEventTopic));
 
             if (log == null)
@@ -21,12 +20,17 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                                     $"topic {TransactionClassifier.CrcOrganisationSignupEventTopic}.");
             }
 
-            var organization = log.SelectToken("topics").Values<string>().Skip(1).First()
-                .Replace(TransactionClassifier.AddressEmptyBytesPrefix, "0x");
+            var isCrcOrganisationSignup =
+                TransactionClassifier.IsCrcOrganisationSignup(log, out var organisationAddress);
+
+            if (!isCrcOrganisationSignup)
+            {
+                throw new Exception("The supplied transaction and receipt is not a CrcOrganisationSignup.");
+            }
 
             yield return new CrcOrganisationSignup
             {
-                Organization = organization
+                Organization = organisationAddress
             };
         }
     }

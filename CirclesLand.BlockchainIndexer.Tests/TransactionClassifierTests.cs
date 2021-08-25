@@ -2,6 +2,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using CirclesLand.BlockchainIndexer.DetailExtractors;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
+using Nethereum.ABI.FunctionEncoding;
+using Nethereum.ABI.Model;
 using Nethereum.Web3;
 using NUnit.Framework;
 
@@ -65,6 +67,39 @@ namespace CirclesLand.BlockchainIndexer.Tests
 
             var trust = receipt.Logs.Where(o => TransactionClassifier.IsCrcTrust(o, out _, out _, out _));
             Assert.IsTrue(trust.Count() == 1);
+        }
+
+        [Test]
+        public async Task TestEoaEthTransfer()
+        {
+            var transaction = await _web3.Eth.Transactions.GetTransactionByHash.SendRequestAsync(
+                "0x12731b64b1b713f4057646aecacb4c7740720ec70caf9da78b8ba56a932290dd");
+            var receipt = await _web3.Eth.Transactions.GetTransactionReceipt.SendRequestAsync(
+                "0x12731b64b1b713f4057646aecacb4c7740720ec70caf9da78b8ba56a932290dd");
+
+            var isEthTransfer = TransactionClassifier.IsEoaEthTransfer(
+                transaction, receipt, out _, out _, out _);
+            
+            Assert.IsTrue(isEthTransfer);
+        }
+
+        [Test]
+        public async Task TestSafeEthTransfer()
+        {
+            var transaction = await _web3.Eth.Transactions.GetTransactionByHash.SendRequestAsync(
+                "0x5ff9093d7b0b95976261c7562ad5c32e32684dd4f20e23178f2ed5c5ac14380c");
+            var receipt = await _web3.Eth.Transactions.GetTransactionReceipt.SendRequestAsync(
+                "0x5ff9093d7b0b95976261c7562ad5c32e32684dd4f20e23178f2ed5c5ac14380c");
+
+            var isSafeEthTransfer = TransactionClassifier.IsSafeEthTransfer(
+                transaction, 
+                receipt,
+                out var initiator,
+                out var from,
+                out var to,
+                out var value);
+            
+            Assert.IsTrue(isSafeEthTransfer);
         }
     }
 }

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
 using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
-using Nethereum.Hex.HexTypes;
 using Nethereum.RPC.Eth.DTOs;
 
 namespace CirclesLand.BlockchainIndexer.DetailExtractors
@@ -14,8 +13,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
         {
             var log = receipt.Logs
                 .FirstOrDefault(o =>
-                    o.SelectToken("topics").Values<string>()
-                        .Contains(TransactionClassifier.CrcTrustEventTopic));
+                    o.SelectToken("topics").Values<string>().Contains(TransactionClassifier.CrcTrustEventTopic));
 
             if (log == null)
             {
@@ -23,19 +21,22 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                                     $"it misses a log entry with topic {TransactionClassifier.CrcTrustEventTopic}.");
             }
 
-            var address = log.SelectToken("topics").Values<string>().Skip(2).First()
-                .Replace(TransactionClassifier.AddressEmptyBytesPrefix, "0x");
+            var isCrcTrust = TransactionClassifier.IsCrcTrust(
+                log,
+                out var canSendTo,
+                out var user,
+                out var limit);
 
-            var canSendTo = log.SelectToken("topics").Values<string>().Skip(1).First()
-                .Replace(TransactionClassifier.AddressEmptyBytesPrefix, "0x");
-
-            var limit = new HexBigInteger(log.Value<string>("data")).ToLong();
+            if (!isCrcTrust)
+            {
+                throw new Exception("The supplied transaction and receipt is not a CrcTrust.");
+            }
 
             yield return new CrcTrust
             {
-                Address = address,
+                Address = user,
                 CanSendTo = canSendTo,
-                Limit = limit
+                Limit = limit.ToLong()
             };
         }
     }
