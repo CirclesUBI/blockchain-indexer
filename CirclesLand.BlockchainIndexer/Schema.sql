@@ -24,26 +24,6 @@ create table transaction (
     classification text[] not null
 );
 
-/*
-create table transaction_log (
-    id bigserial primary key,
-    transaction_id bigint not null references transaction (id),
-    logIndex int not null,
-    address text not null,
-    data text not null
-);
-
-create table log_topic (
-    topic text primary key
-);
-
-create table transaction_log_topic (
-    id bigserial primary key,
-    transactionLogId bigint not null references transaction_log (id),
-    topic text not null references log_topic (topic)
-);
-*/
-
 create table crc_organisation_signup (
     id bigserial primary key,
     transaction_id bigint not null references transaction (id),
@@ -53,8 +33,8 @@ create table crc_organisation_signup (
 create table crc_signup (
     id bigserial primary key,
     transaction_id bigint not null references transaction (id),
-    "user" text unique not null,
-    token text not null
+    "user" text unique not null unique,
+    token text not null unique 
 );
 
 create table crc_hub_transfer (
@@ -82,13 +62,32 @@ create table crc_trust (
     "limit" text not null
 );
 
-/*
+
 create table eth_transfer (
     id bigserial primary key,
     transaction_id bigint not null references transaction (id),
     "from" text not null,
     "to" text not null,
     value text not null
+);
+
+/*
+create table transaction_log (
+    id bigserial primary key,
+    transaction_id bigint not null references transaction (id),
+    logIndex int not null,
+    address text not null,
+    data text not null
+);
+
+create table log_topic (
+    topic text primary key
+);
+
+create table transaction_log_topic (
+    id bigserial primary key,
+    transactionLogId bigint not null references transaction_log (id),
+    topic text not null references log_topic (topic)
 );
 
 create table gnosis_safe_eth_transfer (
@@ -149,4 +148,4 @@ begin
 end
 $yolo$
 language plpgsql;
- */
+*/

@@ -86,11 +86,8 @@ namespace CirclesLand.BlockchainIndexer
                     }
                     catch (Exception ex)
                     {
-                        var origColor = Console.ForegroundColor;
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine(ex.Message);
-                        Console.WriteLine(ex.StackTrace);
-                        Console.ForegroundColor = origColor;
+                        LogError(ex.Message);
+                        LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -120,11 +117,8 @@ namespace CirclesLand.BlockchainIndexer
                     }
                     catch (Exception ex)
                     {
-                        var origColor = Console.ForegroundColor;
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine(ex.Message);
-                        Console.WriteLine(ex.StackTrace);
-                        Console.ForegroundColor = origColor;
+                        LogError(ex.Message);
+                        LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -145,11 +139,8 @@ namespace CirclesLand.BlockchainIndexer
                     }
                     catch (Exception ex)
                     {
-                        var origColor = Console.ForegroundColor;
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine(ex.Message);
-                        Console.WriteLine(ex.StackTrace);
-                        Console.ForegroundColor = origColor;
+                        LogError(ex.Message);
+                        LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -172,11 +163,8 @@ namespace CirclesLand.BlockchainIndexer
                     }
                     catch (Exception ex)
                     {
-                        var origColor = Console.ForegroundColor;
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine(ex.Message);
-                        Console.WriteLine(ex.StackTrace);
-                        Console.ForegroundColor = origColor;
+                        LogError(ex.Message);
+                        LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -202,11 +190,8 @@ namespace CirclesLand.BlockchainIndexer
                     }
                     catch (Exception ex)
                     {
-                        var origColor = Console.ForegroundColor;
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine(ex.Message);
-                        Console.WriteLine(ex.StackTrace);
-                        Console.ForegroundColor = origColor;
+                        LogError(ex.Message);
+                        LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -240,11 +225,8 @@ namespace CirclesLand.BlockchainIndexer
                     }
                     catch (Exception ex)
                     {
-                        var origColor = Console.ForegroundColor;
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine(ex.Message);
-                        Console.WriteLine(ex.StackTrace);
-                        Console.ForegroundColor = origColor;
+                        LogError(ex.Message);
+                        LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -274,11 +256,8 @@ namespace CirclesLand.BlockchainIndexer
                     }
                     catch (Exception ex)
                     {
-                        var origColor = Console.ForegroundColor;
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine(ex.Message);
-                        Console.WriteLine(ex.StackTrace);
-                        Console.ForegroundColor = origColor;
+                        LogError(ex.Message);
+                        LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -325,15 +304,19 @@ namespace CirclesLand.BlockchainIndexer
                     {
                         transaction.Rollback();
 
-                        var origColor = Console.ForegroundColor;
-                        Console.ForegroundColor = ConsoleColor.Red;
-                        Console.WriteLine(
-                            $"      Failed to write '{transactionWithExtractedDetails.Transaction.TransactionHash}' to the db");
-                        Console.WriteLine(ex.Message);
-                        Console.WriteLine(ex.StackTrace);
-                        Console.ForegroundColor = origColor;
+                        LogError($"      Failed to write '{transactionWithExtractedDetails.Transaction.TransactionHash}' to the db");
+                        LogError(ex.Message);
+                        LogError(ex.StackTrace);
                     }
                 }, materializer);
+        }
+
+        public static void LogError(string message)
+        {
+            var origColor = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine(message);
+            Console.ForegroundColor = origColor;
         }
     }
 
