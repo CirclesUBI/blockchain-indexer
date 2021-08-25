@@ -27,7 +27,7 @@ namespace CirclesLand.BlockchainIndexer
 
         public const string ConnectionString =
             @"Server=localhost;Port=5432;Database=circles_land_worker;User ID=postgres;Password=postgres;";
-
+        
         private static readonly Web3 _web3 = new(RpcUrl);
         
         private static readonly RestartSettings _restartSettings = RestartSettings.Create(
@@ -49,9 +49,7 @@ namespace CirclesLand.BlockchainIndexer
                 while (true)
                 {
                     try
-                    {
-                        //await Task.Delay(50);
-                        
+                    {   
                         // Determine if we need to catch up (database old)
                         var currentBlock = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
                         var lastIndexedBlock =
@@ -87,7 +85,7 @@ namespace CirclesLand.BlockchainIndexer
                     catch (Exception ex)
                     {
                         LogError(ex.Message);
-                        LogError(ex.StackTrace);
+                        if (ex.StackTrace != null) LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -118,7 +116,7 @@ namespace CirclesLand.BlockchainIndexer
                     catch (Exception ex)
                     {
                         LogError(ex.Message);
-                        LogError(ex.StackTrace);
+                        if (ex.StackTrace != null) LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -140,7 +138,7 @@ namespace CirclesLand.BlockchainIndexer
                     catch (Exception ex)
                     {
                         LogError(ex.Message);
-                        LogError(ex.StackTrace);
+                        if (ex.StackTrace != null) LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -164,7 +162,7 @@ namespace CirclesLand.BlockchainIndexer
                     catch (Exception ex)
                     {
                         LogError(ex.Message);
-                        LogError(ex.StackTrace);
+                        if (ex.StackTrace != null) LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -191,7 +189,7 @@ namespace CirclesLand.BlockchainIndexer
                     catch (Exception ex)
                     {
                         LogError(ex.Message);
-                        LogError(ex.StackTrace);
+                        if (ex.StackTrace != null) LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -226,7 +224,7 @@ namespace CirclesLand.BlockchainIndexer
                     catch (Exception ex)
                     {
                         LogError(ex.Message);
-                        LogError(ex.StackTrace);
+                        if (ex.StackTrace != null) LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -257,7 +255,7 @@ namespace CirclesLand.BlockchainIndexer
                     catch (Exception ex)
                     {
                         LogError(ex.Message);
-                        LogError(ex.StackTrace);
+                        if (ex.StackTrace != null) LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -306,7 +304,7 @@ namespace CirclesLand.BlockchainIndexer
 
                         LogError($"      Failed to write '{transactionWithExtractedDetails.Transaction.TransactionHash}' to the db");
                         LogError(ex.Message);
-                        LogError(ex.StackTrace);
+                        if (ex.StackTrace != null) LogError(ex.StackTrace);
                     }
                 }, materializer);
         }

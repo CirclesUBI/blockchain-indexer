@@ -32,7 +32,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
 
                 if (!isErc20Transfer || value == null)
                 {
-                    throw new Exception("The supplied transaction and receipt is not a Erc20Transfer.");
+                    continue;
                 }
 
                 yield return new Erc20Transfer
