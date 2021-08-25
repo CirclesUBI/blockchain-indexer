@@ -22,29 +22,17 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             {
                 details.AddRange(Erc20TransferDetailExtractor.Extract(transactionData, transactionReceipt));
             }
-            if (transactionClass.HasFlag(TransactionClass.EoaEthTransfer))
-            {
-                details.AddRange(EthTransferDetailExtractor.Extract(transactionData, transactionReceipt));
-            }
-            if (transactionClass.HasFlag(TransactionClass.TokenMinting))
-            {
-                details.AddRange(TokenMintingDetailExtractor.Extract(transactionData, transactionReceipt));
-            }
             if (transactionClass.HasFlag(TransactionClass.CrcSignup))
             {
                 details.AddRange(CrcSignupDetailExtractor.Extract(transactionData, transactionReceipt));
             }
-            if (transactionClass.HasFlag(TransactionClass.CrcTransfer))
+            if (transactionClass.HasFlag(TransactionClass.CrcHubTransfer))
             {
                 details.AddRange(CrcHubTransferDetailExtractor.Extract(transactionData, transactionReceipt));
             }
             if (transactionClass.HasFlag(TransactionClass.CrcOrganisationSignup))
             {
                 details.AddRange(CrcOrganisationSignupDetailExtractor.Extract(transactionData, transactionReceipt));
-            }
-            if (transactionClass.HasFlag(TransactionClass.GnosisSafeEthTransfer))
-            {
-                details.AddRange(GnosisSafeEthTransferDetailExtractor.Extract(transactionData, transactionReceipt));
             }
 
             return details.ToImmutableArray();

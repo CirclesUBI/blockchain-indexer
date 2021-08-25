@@ -6,19 +6,10 @@ namespace CirclesLand.BlockchainIndexer.TransactionDetailModels
     public enum TransactionClass
     {
         Unknown = 0,
-        EoaEthTransfer = 1,
-        Erc20Transfer = 2,
-        CrcTransfer = 4,
-        CrcSignup = 8,
-        CrcOrganisationSignup = 16,
-        TokenMinting = 32,
-        CrcTrust = 64,
-        InvitationCreation = 128,
-        InvitationRedemption = 256,
-        InitialSafeFunding = 512,
-        GnosisSafeEthTransfer = 1024,
-        ContractCreation = 2048,
-        SafeCreation = 4096,
-        Call = 8192
+        Erc20Transfer = 1,
+        CrcSignup = 2,
+        CrcOrganisationSignup = 4,
+        CrcHubTransfer = 8,
+        CrcTrust = 16
     }
 }

@@ -82,6 +82,7 @@ create table crc_trust (
     "limit" text not null
 );
 
+/*
 create table eth_transfer (
     id bigserial primary key,
     transaction_id bigint not null references transaction (id),
@@ -110,12 +111,13 @@ create table token_minting (
     "to" text not null,
     token text not null,
     tokens text not null
-);
+);*/
 
 -- 'invitation_eoas' are created empty.
 -- To make them usable they have to be funded.
 -- The funding and redemptions are tracked in
 -- 'invitation_eoa_funding' and 'invitation_eoa_redemption'. 
+/*
 create table invitation_eoa (
     id bigserial primary key,
     owner_id text not null,
@@ -147,3 +149,4 @@ begin
 end
 $yolo$
 language plpgsql;
+ */

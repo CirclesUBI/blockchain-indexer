@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CirclesLand.BlockchainIndexer", "CirclesLand.BlockchainIndexer\CirclesLand.BlockchainIndexer.csproj", "{B88B5342-7C74-4CE4-A5A1-4DFF3DE8E27F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CirclesLand.BlockchainIndexer.Tests", "CirclesLand.BlockchainIndexer.Tests\CirclesLand.BlockchainIndexer.Tests.csproj", "{887E8611-0D84-4C0C-A74B-828656BC72E2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{B88B5342-7C74-4CE4-A5A1-4DFF3DE8E27F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B88B5342-7C74-4CE4-A5A1-4DFF3DE8E27F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B88B5342-7C74-4CE4-A5A1-4DFF3DE8E27F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{887E8611-0D84-4C0C-A74B-828656BC72E2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{887E8611-0D84-4C0C-A74B-828656BC72E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{887E8611-0D84-4C0C-A74B-828656BC72E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{887E8611-0D84-4C0C-A74B-828656BC72E2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
