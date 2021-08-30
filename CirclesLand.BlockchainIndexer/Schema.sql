@@ -46,6 +46,14 @@ create table crc_signup (
 create unique index idx_crc_signup_user on crc_signup("user") include (transaction_id, token);
 create unique index idx_crc_signup_token on crc_signup(token) include (transaction_id, "user");
 
+create view crc_signups_per_day
+as
+    select b.timestamp::date, count(*) as signups
+    from crc_signup s
+             join transaction t on s.transaction_id = t.id
+             join block b on t.block_number = b.number
+    group by b.timestamp::date;
+
 create table crc_hub_transfer (
     id bigserial primary key,
     transaction_id bigint not null references transaction (id),
@@ -56,6 +64,14 @@ create table crc_hub_transfer (
 
 create index idx_crc_hub_transfer_from on crc_hub_transfer("from") include (transaction_id);
 create index idx_crc_hub_transfer_to on crc_hub_transfer("to") include (transaction_id);
+
+create view crc_hub_transfers_per_day
+as
+    select b.timestamp::date, count(*) as transfers
+    from crc_hub_transfer s
+             join transaction t on s.transaction_id = t.id
+             join block b on t.block_number = b.number
+    group by b.timestamp::date;
 
 create table erc20_transfer (
     id bigserial primary key,
@@ -69,10 +85,23 @@ create table erc20_transfer (
 create index idx_erc20_transfer_from on erc20_transfer("from") include (transaction_id);
 create index idx_erc20_transfer_to on erc20_transfer("to") include (transaction_id);
 
-create view erc20_minting as 
-    select * 
+create view crc_token_transfer
+as
+    select t.*
+    from erc20_transfer t
+             join crc_signup s on t.token = s.token;
+
+create view erc20_minting 
+as
+    select *
     from erc20_transfer
     where "from" = '0x0000000000000000000000000000000000000000';
+
+create view crc_minting 
+as
+    select tm.*
+    from erc20_minting tm
+             join crc_signup s on tm.token = s.token;
 
 create table crc_trust (
     id bigserial primary key,
@@ -84,6 +113,22 @@ create table crc_trust (
 
 create index idx_crc_trust_address on crc_trust(address) include (transaction_id);
 create index idx_crc_trust_can_send_to on crc_trust(can_send_to) include (transaction_id);
+
+create view current_trust
+as
+    select lte.address,
+           lte.can_send_to,
+           ct."limit",
+           lte.history_count
+    from (
+             select max(transaction_id) transaction_id,
+                    count(transaction_id) history_count,
+                    address,
+                    can_send_to
+             from crc_trust
+             group by address,
+                      can_send_to) lte
+             join crc_trust ct on lte.transaction_id = ct.transaction_id;
 
 create table eth_transfer (
     id bigserial primary key,

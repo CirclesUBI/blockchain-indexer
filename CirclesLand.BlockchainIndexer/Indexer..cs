@@ -1,7 +1,5 @@
 ﻿using System;
-using System.ComponentModel;
 using System.Data;
-using System.Drawing;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +11,7 @@ using Akka.Util;
 using CirclesLand.BlockchainIndexer.DetailExtractors;
 using CirclesLand.BlockchainIndexer.Persistence;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
+using CirclesLand.BlockchainIndexer.Util;
 using Dapper;
 using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
 using Nethereum.Hex.HexTypes;
@@ -23,89 +22,81 @@ namespace CirclesLand.BlockchainIndexer
 {
     public class Indexer
     {
-        const string RpcUrl = "https://rpc.circles.land";
-
-        public const string ConnectionString =
-            @"Server=localhost;Port=5432;Database=circles_land_worker;User ID=postgres;Password=postgres;";
-        
-        private static readonly Web3 _web3 = new(RpcUrl);
-        
         private static readonly RestartSettings _restartSettings = RestartSettings.Create(
-            minBackoff: TimeSpan.FromSeconds(3), 
+            minBackoff: TimeSpan.FromSeconds(3),
             maxBackoff: TimeSpan.FromSeconds(30),
             randomFactor: 0.2 // adds 20% "noise" to vary the intervals slightly
         ).WithMaxRestarts(20, TimeSpan.FromMinutes(5)); // limits the amount of restarts to 20 within 5 minutes
 
-        /// <summary>
-        /// Checks for new blocks every second. All new blocks are emitted to the stream.
-        /// </summary>
-        public readonly Source<HexBigInteger, NotUsed> BlockSource =
-            RestartSource.WithBackoff(() => 
-            Source.UnfoldAsync(new HexBigInteger(0), async lastBlock =>
-            {
-                await using var connection = new NpgsqlConnection(ConnectionString);
-                connection.Open();
+        private readonly Web3 _web3;
+        private readonly string _connectionString;
 
-                while (true)
+        public Indexer(
+            string connectionString,
+            string rpcEndpointUrl)
+        {
+            _connectionString = connectionString;
+            _web3 = new Web3(rpcEndpointUrl);
+        }
+
+        private long? _lastBlock = null;
+
+        public Source<HexBigInteger, NotUsed> CreateSource()
+        {
+            return RestartSource.WithBackoff(() =>
+                Source.UnfoldAsync(new HexBigInteger(0), async lastBlock =>
                 {
                     try
-                    {   
-                        // Determine if we need to catch up (database old)
-                        var currentBlock = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
-                        var lastIndexedBlock =
-                            connection.QuerySingleOrDefault<long?>("select max(number) from block") ?? 0;
+                    {
+                        if (_lastBlock == null)
+                        {
+                            await using var connection = new NpgsqlConnection(_connectionString);
+                            connection.Open();
+                            
+                            var lastIndexedBlock =
+                                connection.QuerySingleOrDefault<long?>("select max(number) from block") ?? 12529458;
+
+                            _lastBlock = lastIndexedBlock;
+                        }
+
+                        var nextBlock = _lastBlock + 1;
+                        _lastBlock = nextBlock;
                         
-                        if (lastBlock.Value == 0)
-                        {
-                            lastBlock = new HexBigInteger(lastIndexedBlock == 0 ? 12529458 : lastIndexedBlock);
-                        }
-
-                        if (currentBlock.ToLong() > lastIndexedBlock && currentBlock.Value > lastBlock.Value)
-                        {
-                            var nextBlockToIndex = lastBlock.Value + 1;
-                            Console.WriteLine($"Catching up block: {nextBlockToIndex}");
-
-                            return new Option<(HexBigInteger, HexBigInteger)>((new HexBigInteger(nextBlockToIndex),
-                                new HexBigInteger(nextBlockToIndex)));
-                        }
-
-                        await Task.Delay(500);
-
-                        // At this point we wait for a new block
-                        currentBlock = await _web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
-                        if (currentBlock == lastBlock)
-                        {
-                            continue;
-                        }
-
-                        Console.WriteLine($"Got new block: {currentBlock}");
-
-                        return new Option<(HexBigInteger, HexBigInteger)>((currentBlock, currentBlock));
+                        return new Option<(HexBigInteger, HexBigInteger)>((
+                            new HexBigInteger(nextBlock.Value),
+                            new HexBigInteger(nextBlock.Value)));
                     }
                     catch (Exception ex)
                     {
-                        LogError(ex.Message);
-                        if (ex.StackTrace != null) LogError(ex.StackTrace);
+                        Logger.LogError(ex.Message);
+                        if (ex.StackTrace != null) Logger.LogError(ex.StackTrace);
 
                         throw;
                     }
-                }
-            }), _restartSettings);
+                }), _restartSettings);
+        }
+
 
         public void Start()
         {
+            long downloadedBlocks = 0;
+            long downloadedTransactionReceipts = 0;
+            long writtenTransactions = 0;
+            
+            DateTime startedAt = DateTime.Now;
+        
             var system = ActorSystem.Create("system");
             var materializer = system.Materializer();
 
             // Check for new blocks every 500ms and emit the block no. every time it changed
-            BlockSource
+            CreateSource()
 
                 // Buffer up to 25 block nos. in case that the downstream processing is not fast enough.
                 // When the buffer size is exceeded the whole stream will fail.
                 // .Buffer(25, OverflowStrategy.Fail) // TODO: This doesn't suite to "catch up" mode
 
                 // Get the full block with all transactions
-                .SelectAsync(1, currentBlockNo =>
+                .SelectAsync(16, currentBlockNo =>
                 {
                     try
                     {
@@ -115,8 +106,8 @@ namespace CirclesLand.BlockchainIndexer
                     }
                     catch (Exception ex)
                     {
-                        LogError(ex.Message);
-                        if (ex.StackTrace != null) LogError(ex.StackTrace);
+                        Logger.LogError(ex.Message);
+                        if (ex.StackTrace != null) Logger.LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -127,6 +118,7 @@ namespace CirclesLand.BlockchainIndexer
                 {
                     try
                     {
+                        Interlocked.Increment(ref downloadedBlocks);
                         Console.WriteLine($"  Found {block.Transactions.Length} transactions in block {block.Number}");
 
                         return block.Transactions
@@ -137,21 +129,25 @@ namespace CirclesLand.BlockchainIndexer
                     }
                     catch (Exception ex)
                     {
-                        LogError(ex.Message);
-                        if (ex.StackTrace != null) LogError(ex.StackTrace);
+                        Logger.LogError(ex.Message);
+                        if (ex.StackTrace != null) Logger.LogError(ex.StackTrace);
 
                         throw;
                     }
                 })
 
+                .Buffer(1024, OverflowStrategy.Backpressure)
+                
                 // Add the receipts for every transaction
-                .SelectAsync(2, async timestampAndTransaction =>
+                .SelectAsync(48, async timestampAndTransaction =>
                 {
                     try
                     {
                         var receipt = await _web3.Eth.Transactions.GetTransactionReceipt.SendRequestAsync(
                             timestampAndTransaction.Transaction.TransactionHash);
 
+                        Interlocked.Increment(ref downloadedTransactionReceipts);
+                        
                         return (
                             TotalTransactionsInBlock: timestampAndTransaction.TotalTransactionsInBlock,
                             Timestamp: timestampAndTransaction.Timestamp,
@@ -161,13 +157,15 @@ namespace CirclesLand.BlockchainIndexer
                     }
                     catch (Exception ex)
                     {
-                        LogError(ex.Message);
-                        if (ex.StackTrace != null) LogError(ex.StackTrace);
+                        Logger.LogError(ex.Message);
+                        if (ex.StackTrace != null) Logger.LogError(ex.StackTrace);
 
                         throw;
                     }
                 })
 
+                .Buffer(4096, OverflowStrategy.Backpressure)
+                
                 // Classify all transactions
                 .Select(transactionAndReceipt =>
                 {
@@ -188,8 +186,8 @@ namespace CirclesLand.BlockchainIndexer
                     }
                     catch (Exception ex)
                     {
-                        LogError(ex.Message);
-                        if (ex.StackTrace != null) LogError(ex.StackTrace);
+                        Logger.LogError(ex.Message);
+                        if (ex.StackTrace != null) Logger.LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -223,8 +221,8 @@ namespace CirclesLand.BlockchainIndexer
                     }
                     catch (Exception ex)
                     {
-                        LogError(ex.Message);
-                        if (ex.StackTrace != null) LogError(ex.StackTrace);
+                        Logger.LogError(ex.Message);
+                        if (ex.StackTrace != null) Logger.LogError(ex.StackTrace);
 
                         throw;
                     }
@@ -254,18 +252,21 @@ namespace CirclesLand.BlockchainIndexer
                     }
                     catch (Exception ex)
                     {
-                        LogError(ex.Message);
-                        if (ex.StackTrace != null) LogError(ex.StackTrace);
+                        Logger.LogError(ex.Message);
+                        if (ex.StackTrace != null) Logger.LogError(ex.StackTrace);
 
                         throw;
                     }
                 })
+
+                .Buffer(8192, OverflowStrategy.Backpressure)
+                
                 .RunForeach(transactionWithExtractedDetails =>
                 {
                     Console.WriteLine(
                         $"      Writing '{transactionWithExtractedDetails.Transaction.TransactionHash}' to the db");
 
-                    using var connection = new NpgsqlConnection(ConnectionString);
+                    using var connection = new NpgsqlConnection(_connectionString);
                     connection.Open();
 
                     // "Read committed"-isolation level should be sufficient because the data will not
@@ -294,6 +295,21 @@ namespace CirclesLand.BlockchainIndexer
                         }
 
                         transaction.Commit();
+                        Interlocked.Increment(ref writtenTransactions);
+
+                        if (writtenTransactions % 100 == 0)
+                        {
+                            var defaultColor = Console.ForegroundColor;
+                            Console.ForegroundColor = ConsoleColor.Cyan;
+                            Console.WriteLine($"Downloaded {downloadedBlocks} blocks since {startedAt}");
+                            Console.WriteLine($"Downloaded {downloadedTransactionReceipts} receipts since {startedAt}");
+                            Console.WriteLine($"Wrote {writtenTransactions} transactions since {startedAt}");
+                            var elapsedTime = DateTime.Now - startedAt;
+                            Console.WriteLine($"Performance: {downloadedBlocks / elapsedTime.TotalSeconds} downloaded blocks per second");
+                            Console.WriteLine($"Performance: {downloadedTransactionReceipts / elapsedTime.TotalSeconds} downloaded receipts per second");
+                            Console.WriteLine($"Performance: {writtenTransactions / elapsedTime.TotalSeconds} written transactions per second");
+                            Console.ForegroundColor = defaultColor;
+                        }
 
                         Console.WriteLine(
                             $"      Successfully wrote '{transactionWithExtractedDetails.Transaction.TransactionHash}' to the db");
@@ -302,45 +318,12 @@ namespace CirclesLand.BlockchainIndexer
                     {
                         transaction.Rollback();
 
-                        LogError($"      Failed to write '{transactionWithExtractedDetails.Transaction.TransactionHash}' to the db");
-                        LogError(ex.Message);
-                        if (ex.StackTrace != null) LogError(ex.StackTrace);
+                        Logger.LogError(
+                            $"      Failed to write '{transactionWithExtractedDetails.Transaction.TransactionHash}' to the db");
+                        Logger.LogError(ex.Message);
+                        if (ex.StackTrace != null) Logger.LogError(ex.StackTrace);
                     }
                 }, materializer);
-        }
-
-        public static void LogError(string message)
-        {
-            var origColor = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine(message);
-            Console.ForegroundColor = origColor;
-        }
-    }
-
-    public static class Program
-    {
-        public static void Main()
-        {
-            var are = new AutoResetEvent(false);
-            Task.Run(() =>
-            {
-                try
-                {
-                    var c = new Indexer();
-                    c.Start();
-                }
-                catch (Exception ex)
-                {
-                    var origColor = Console.ForegroundColor;
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine(ex.Message);
-                    Console.WriteLine(ex.StackTrace);
-                    Console.ForegroundColor = origColor;
-                }
-            });
-            are.WaitOne();
-            //new AutoResetEvent(false).WaitOne();
         }
     }
 }
