@@ -347,6 +347,144 @@ begin
 end
 $yolo$;
 
+create view crc_safe_timeline
+as
+with safe_timeline as (
+    select t.id
+         , b.timestamp
+         , b.number
+         , t.index
+         , t.hash
+         , 'crc_signup' as type
+         , cs."user"
+         , 'self'       as direction
+         , 0            as value
+         , row_to_json(cs) obj
+    from crc_signup cs
+             join transaction t on cs.transaction_id = t.id
+             join block b on t.block_number = b.number
+    union all
+    select t.id
+         , b.timestamp
+         , b.number
+         , t.index
+         , t.hash
+         , 'crc_hub_transfer' as type
+         , crc_signup."user"
+         , case
+               when cht."from" = crc_signup."user" and cht."to" = crc_signup."user" then 'self'
+               when cht."from" = crc_signup."user" then 'out'
+               else 'in' end  as direction
+         , cht.value
+         , (
+        select row_to_json(_steps)
+        from (
+                 select cht.id,
+                        t.id as          transaction_id,
+                        t."hash"         "transactionHash",
+                        ht."from"        "from",
+                        ht."to"          "to",
+                        ht."value"::text flow,
+                        (select json_agg(steps) transfers
+                         from (
+                                  select E20T."from"           "from",
+                                         E20T."to"             "to",
+                                         E20T."token"          "token",
+                                         E20T."value"::text as "value"
+                                  from crc_token_transfer E20T
+                                  where E20T.transaction_id = t.id
+                              ) steps)
+                 from transaction t
+                          join crc_hub_transfer ht on t.id = ht.transaction_id
+                 where t.id = cht.transaction_id
+             ) _steps
+    )                         as transitive_path
+    from crc_hub_transfer cht
+             join crc_signup on crc_signup."user" = cht."from" or crc_signup."user" = cht."to"
+             join transaction t on cht.transaction_id = t.id
+             join block b on t.block_number = b.number
+    union all
+    select t.id
+         , b.timestamp
+         , b.number
+         , t.index
+         , t.hash
+         , 'crc_trust'       as type
+         , crc_signup."user"
+         , case
+               when ct.can_send_to = crc_signup."user" and ct.address = crc_signup."user" then 'self'
+               when ct.can_send_to = crc_signup."user" then 'out'
+               else 'in' end as direction
+         , ct."limit"
+         , row_to_json(ct)      obj
+    from crc_trust ct
+             join crc_signup on crc_signup."user" = ct.address or crc_signup."user" = ct.can_send_to
+             join transaction t on ct.transaction_id = t.id
+             join block b on t.block_number = b.number
+    union all
+    select t.id
+         , b.timestamp
+         , b.number
+         , t.index
+         , t.hash
+         , 'crc_minting' as type
+         , crc_signup."user"
+         , 'in'          as direction
+         , ct.value
+         , row_to_json(ct)  obj
+    from crc_minting ct
+             join crc_signup on ct.token = crc_signup.token
+             join transaction t on ct.transaction_id = t.id
+             join block b on t.block_number = b.number
+    union all
+    select t.id
+         , b.timestamp
+         , b.number
+         , t.index
+         , t.hash
+         , 'eth_transfer'    as type
+         , crc_signup."user"
+         , case
+               when eth."from" = crc_signup."user" and eth."to" = crc_signup."user" then 'self'
+               when eth."from" = crc_signup."user" then 'out'
+               else 'in' end as direction
+         , eth.value
+         , row_to_json(eth)     obj
+    from eth_transfer eth
+             join crc_signup on crc_signup."user" = eth."from" or crc_signup."user" = eth."to"
+             join transaction t on eth.transaction_id = t.id
+             join block b on t.block_number = b.number
+    union all
+    select t.id
+         , b.timestamp
+         , b.number
+         , t.index
+         , t.hash
+         , 'gnosis_safe_eth_transfer' as type
+         , crc_signup."user"
+         , case
+               when seth."from" = crc_signup."user" and seth."to" = crc_signup."user" then 'self'
+               when seth."from" = crc_signup."user" then 'out'
+               else 'in' end          as direction
+         , seth.value
+         , row_to_json(seth)             obj
+    from gnosis_safe_eth_transfer seth
+             join crc_signup on crc_signup."user" = seth."from" or crc_signup."user" = seth."to"
+             join transaction t on seth.transaction_id = t.id
+             join block b on t.block_number = b.number
+)
+select id transaction_id
+     , timestamp
+     , number block_number
+     , index transaction_index
+     , hash transaction_hash
+     , type
+     , "user" safe_address
+     , direction
+     , value
+     , obj
+from safe_timeline st;
+
 create or replace procedure publish_event(topic text, message text)
 as
 $yolo$
