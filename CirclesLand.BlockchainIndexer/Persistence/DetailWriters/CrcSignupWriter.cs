@@ -26,8 +26,8 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             return connection.QuerySingle<long>(InsertCrcSignupSql, new
             {
                 transaction_id = transactionId,
-                user = data.User,
-                token = data.Token
+                user = data.User?.ToLowerInvariant(),
+                token = data.Token?.ToLowerInvariant()
             }, dbTransaction);
         }
     }

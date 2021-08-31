@@ -28,9 +28,9 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             return connection.QuerySingle<long>(InsertGnosisSafeEthTransferSql, new
             {
                 transaction_id = transactionId,
-                initiator = data.Initiator,
-                from = data.From,
-                to = data.To,
+                initiator = data.Initiator?.ToLowerInvariant(),
+                from = data.From?.ToLowerInvariant(),
+                to = data.To?.ToLowerInvariant(),
                 value = data.Value
             }, dbTransaction);
         }

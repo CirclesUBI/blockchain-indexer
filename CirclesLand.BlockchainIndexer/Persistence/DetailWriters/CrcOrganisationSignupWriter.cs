@@ -25,7 +25,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             return connection.QuerySingle<long>(InsertCrcOrganisationSql, new
             {
                 transaction_id = transactionId,
-                organisation = data.Organization
+                organisation = data.Organization?.ToLowerInvariant()
             }, dbTransaction);
         }
     }

@@ -27,8 +27,8 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             return connection.QuerySingle<long>(InsertEthTransferSql, new
             {
                 transaction_id = transactionId,
-                from = data.From,
-                to = data.To,
+                from = data.From?.ToLowerInvariant(),
+                to = data.To?.ToLowerInvariant(),
                 value = data.Value
             }, dbTransaction);
         }
