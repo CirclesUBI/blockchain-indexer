@@ -109,38 +109,6 @@ as
     from erc20_minting tm
              join crc_signup s on tm.token = s.token;
 
-create view crc_balances
-as
-with crc_users as (
-    select "user", token
-    from crc_signup
-), all_events as (
-    select cht.transaction_id
-         , 'crc_hub_transfer' as type
-         , u."user" as subject
-         , case
-               when cht."from" = u."user" and cht."to" = u."user" then 'self'
-               when cht."from" = u."user" then 'out'
-               else 'in' end  as direction
-         , cht.value
-    from crc_hub_transfer cht
-             join crc_users u on cht."from" = u."user" or cht."to" = u."user"
-    union all
-    select cht.transaction_id
-         , 'crc_minting' as type
-         , u."user" as subject
-         , 'in' as direction
-         , cht.value
-    from crc_minting cht
-            join crc_users u on cht."to" = u."user" and u.token = cht.token
-)
-select e.subject
-     , sum(case when e.direction = 'out' then -(e.value) else e.value end) as balance
-from all_events e
-         join transaction t on e.transaction_id = t.id
-         join block b on b.number = t.block_number
-group by e.subject;
-
 create view crc_ledger
 as
 with ledger as (
@@ -172,8 +140,15 @@ from ledger l
          join block b on t.block_number = b.number
 order by b.timestamp, t.index, l.token, l.verb desc /* TODO: The log index is gone */;
 
-create view crc_balances_by_token
+create view crc_balances_by_safe
 as
+    select safe_address, sum(value) balance
+    from crc_ledger
+    group by safe_address
+    order by safe_address;
+
+create view crc_balances_by_safe_and_token
+    as
     select safe_address, token, token_owner, sum(value) balance
     from crc_ledger
     group by safe_address, token, token_owner
@@ -197,9 +172,10 @@ create index idx_crc_trust_address on crc_trust(address) include (transaction_id
 create index idx_crc_trust_can_send_to on crc_trust(can_send_to) include (transaction_id);
 create index idx_crc_trust_fk_transaction_id on crc_trust(transaction_id);
 
-create view current_trust
+create view crc_current_trust
 as
-    select lte.address,
+    select lte.address as "user",
+           cs_a.token user_token,
            lte.can_send_to,
            ct."limit",
            lte.history_count
@@ -211,7 +187,8 @@ as
              from crc_trust
              group by address,
                       can_send_to) lte
-             join crc_trust ct on lte.transaction_id = ct.transaction_id;
+    join crc_trust ct on lte.transaction_id = ct.transaction_id
+    join crc_signup cs_a on lte.address = cs_a."user";
 
 create table eth_transfer (
     id bigserial primary key,
@@ -274,20 +251,52 @@ begin
         from crc_signup
         where "user" = safe_address
     ), my_events as (
+        select cs.transaction_id
+             , 'crc_signup' as type
+             , 'self' as direction
+             , 0 as value
+             , row_to_json(cs) obj
+        from crc_signup cs
+        where "user" = safe_address
+        union all
         select cht.transaction_id
              , 'crc_hub_transfer' as type
              , case when cht."from" = safe_address and cht."to" = safe_address then 'self'
                     when cht."from" = safe_address then 'out'
                     else 'in' end as direction
              , cht.value
-             , row_to_json(cht) obj
+             ,(
+                 select row_to_json(_steps) 
+                 from (
+                     select cht.id, 
+                            t.id as transaction_id, 
+                            t."hash" "transactionHash",
+                            ht."from"  "from",
+                            ht."to"    "to",
+                            ht."value"::text flow,
+                            (select json_agg(steps) transfers
+                             from (
+                                      select E20T."from"     "from",
+                                             E20T."to"       "to",
+                                             E20T."token"    "token",
+                                             E20T."value"::text as "value"
+                                      from crc_token_transfer E20T
+                                      where E20T.transaction_id = t.id
+                                  ) steps)
+                     from transaction t
+                              join crc_hub_transfer ht on t.id = ht.transaction_id
+                     where t.id = cht.transaction_id
+                 ) _steps
+             ) as transitive_path
         from crc_hub_transfer cht
         where (cht."from" = safe_address
             or cht."to" = safe_address)
         union all
         select ct.transaction_id
              , 'crc_trust' as type
-             , case when ct.can_send_to = safe_address then 'out' else 'in' end as direction
+             , case when ct.can_send_to = safe_address and ct.address = safe_address then 'self'
+                    when ct.can_send_to = safe_address then 'out' 
+                    else 'in' end as direction
              , ct."limit"
              , row_to_json(ct) obj
         from crc_trust ct
