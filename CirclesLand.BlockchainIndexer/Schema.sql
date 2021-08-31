@@ -141,6 +141,50 @@ from all_events e
          join block b on b.number = t.block_number
 group by e.subject;
 
+create view crc_ledger
+as
+with ledger as (
+    select t.transaction_id
+         , 'add' as verb
+         , sum(t.value) as value
+         , t.token
+         , cs."user" token_owner
+         , 'to' predicate
+         , t."to" as safe_address
+    from erc20_transfer t -- includes minting and every transfer of all crc-tokens
+             join crc_signup cs on t.token = cs.token
+    group by t.transaction_id, t."to", t.token, cs."user"
+    union
+    select t.transaction_id,
+           'remove'        as verb,
+           -(sum(t.value)) as value,
+           t.token,
+           cs."user" token_owner,
+           'from'             predicate,
+           t."from"        as safe_address
+    from erc20_transfer t -- includes minting and every transfer of all crc-tokens
+             join crc_signup cs on t.token = cs.token
+    group by t.transaction_id, t."from", t.token, cs."user"
+)
+select b.timestamp, l.*
+from ledger l
+         join transaction t on t.id = l.transaction_id
+         join block b on t.block_number = b.number
+order by b.timestamp, t.index, l.token, l.verb desc /* TODO: The log index is gone */;
+
+create view crc_balances_by_token
+as
+    select safe_address, token, token_owner, sum(value) balance
+    from crc_ledger
+    group by safe_address, token, token_owner
+    order by safe_address, balance desc;
+
+create view crc_total_minted_amount
+as
+    select sum(value) total_crc_amount
+    from crc_token_transfer
+    where "from" = '0x0000000000000000000000000000000000000000';
+
 create table crc_trust (
     id bigserial primary key,
     transaction_id bigint not null references transaction (id),
