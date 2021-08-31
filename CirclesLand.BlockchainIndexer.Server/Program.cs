@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using CirclesLand.BlockchainIndexer.Api;
 using KestrelWebSocketServer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
@@ -18,6 +20,14 @@ namespace CirclesLand.BlockchainIndexer.Server
         {
             var c = new Indexer(ConnectionString, RpcUrl);
             c.Start();
+
+            var databaseEventListener = DatabaseEventListener.Create(ConnectionString, "new_event");
+            databaseEventListener.Data += (s, e) =>
+            {
+                Console.WriteLine($"Received DB-Event:  ${e.Payload.Substring(0, e.Payload.Length / 3)}");
+                WebsocketServer.BroadcastMessage(e.Payload);
+            };
+            databaseEventListener.Start();
             
             Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>

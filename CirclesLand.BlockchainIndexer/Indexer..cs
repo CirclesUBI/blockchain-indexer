@@ -96,7 +96,7 @@ namespace CirclesLand.BlockchainIndexer
                 // .Buffer(25, OverflowStrategy.Fail) // TODO: This doesn't suite to "catch up" mode
 
                 // Get the full block with all transactions
-                .SelectAsync(16, currentBlockNo =>
+                .SelectAsync(24, currentBlockNo =>
                 {
                     try
                     {
@@ -119,7 +119,7 @@ namespace CirclesLand.BlockchainIndexer
                     try
                     {
                         Interlocked.Increment(ref downloadedBlocks);
-                        Console.WriteLine($"  Found {block.Transactions.Length} transactions in block {block.Number}");
+                        // Console.WriteLine($"  Found {block.Transactions.Length} transactions in block {block.Number}");
 
                         return block.Transactions
                             .Select(o => (
@@ -139,7 +139,7 @@ namespace CirclesLand.BlockchainIndexer
                 .Buffer(1024, OverflowStrategy.Backpressure)
                 
                 // Add the receipts for every transaction
-                .SelectAsync(48, async timestampAndTransaction =>
+                .SelectAsync(96, async timestampAndTransaction =>
                 {
                     try
                     {
@@ -199,6 +199,7 @@ namespace CirclesLand.BlockchainIndexer
                     try
                     {
                         var isUnknown = transactionAndReceipt.Classification == TransactionClass.Unknown;
+                        /*
                         if (isUnknown)
                         {
                             Console.WriteLine(
@@ -209,6 +210,7 @@ namespace CirclesLand.BlockchainIndexer
                             Console.WriteLine(
                                 $"    Tx {transactionAndReceipt.Transaction.TransactionIndex}: {transactionAndReceipt.Classification}");
                         }
+                        */
 
                         return (
                             TotalTransactionsInBlock: transactionAndReceipt.TotalTransactionsInBlock,
@@ -263,9 +265,9 @@ namespace CirclesLand.BlockchainIndexer
                 
                 .RunForeach(transactionWithExtractedDetails =>
                 {
-                    Console.WriteLine(
+                  /*  Console.WriteLine(
                         $"      Writing '{transactionWithExtractedDetails.Transaction.TransactionHash}' to the db");
-
+*/
                     using var connection = new NpgsqlConnection(_connectionString);
                     connection.Open();
 
@@ -297,10 +299,11 @@ namespace CirclesLand.BlockchainIndexer
                         transaction.Commit();
                         Interlocked.Increment(ref writtenTransactions);
 
-                        if (writtenTransactions % 100 == 0)
+                        if (writtenTransactions % 1000 == 0)
                         {
                             var defaultColor = Console.ForegroundColor;
                             Console.ForegroundColor = ConsoleColor.Cyan;
+                            Console.WriteLine($"----");
                             Console.WriteLine($"Downloaded {downloadedBlocks} blocks since {startedAt}");
                             Console.WriteLine($"Downloaded {downloadedTransactionReceipts} receipts since {startedAt}");
                             Console.WriteLine($"Wrote {writtenTransactions} transactions since {startedAt}");
@@ -310,9 +313,10 @@ namespace CirclesLand.BlockchainIndexer
                             Console.WriteLine($"Performance: {writtenTransactions / elapsedTime.TotalSeconds} written transactions per second");
                             Console.ForegroundColor = defaultColor;
                         }
-
+/*
                         Console.WriteLine(
                             $"      Successfully wrote '{transactionWithExtractedDetails.Transaction.TransactionHash}' to the db");
+                            */
                     }
                     catch (Exception ex)
                     {

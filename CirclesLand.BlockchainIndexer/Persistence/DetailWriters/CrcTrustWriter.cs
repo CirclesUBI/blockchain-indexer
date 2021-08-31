@@ -19,7 +19,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
                     , can_send_to
                     , ""limit""
                 ) values (
-                    @transaction_id, @address, @can_send_to, @limit      
+                    @transaction_id, @address, @can_send_to, @limit::numeric      
                 )
                 returning id;
             ";

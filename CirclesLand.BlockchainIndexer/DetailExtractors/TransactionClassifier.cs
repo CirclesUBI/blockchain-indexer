@@ -392,6 +392,11 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                 return false;
             }
 
+            if (transaction.To == null)
+            {
+                return false;
+            }
+
             from = transaction.From;
             to = transaction.To;
             value = transaction.Value;

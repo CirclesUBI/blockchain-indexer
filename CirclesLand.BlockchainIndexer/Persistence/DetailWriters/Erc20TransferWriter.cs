@@ -20,7 +20,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
                     , token
                     , value
                 ) values (
-                    @transaction_id, @from, @to, @token, @value
+                    @transaction_id, @from, @to, @token, @value::numeric
                 )
                 returning id;
             ";
