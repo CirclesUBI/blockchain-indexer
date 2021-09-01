@@ -65,6 +65,15 @@ create table crc_hub_transfer (
     value numeric not null
 );
 
+create view crc_alive_accounts
+as
+    select tt."to"
+    from crc_token_transfer tt
+             join transaction t on tt.transaction_id = t.id
+             join block b on t.block_number = b.number
+    group by tt."to"
+    having max(b.timestamp) > now() - interval '90 days';
+
 create index idx_crc_hub_transfer_from on crc_hub_transfer("from") include (transaction_id);
 create index idx_crc_hub_transfer_to on crc_hub_transfer("to") include (transaction_id);
 create index idx_crc_hub_transfer_fk_transaction_id on crc_hub_transfer(transaction_id);
