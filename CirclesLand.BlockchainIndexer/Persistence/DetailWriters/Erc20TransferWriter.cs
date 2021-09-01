@@ -20,7 +20,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
                     , token
                     , value
                 ) values (
-                    @transaction_id, @from, @to, @token, @value
+                    @transaction_id, @from, @to, @token, @value::numeric
                 )
                 returning id;
             ";
@@ -28,9 +28,9 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             return connection.QuerySingle<long>(InserErc20TransferSql, new
             {
                 transaction_id = transactionId,
-                from = data.From,
-                to = data.To,
-                token = data.Token,
+                from = data.From?.ToLowerInvariant(),
+                to = data.To?.ToLowerInvariant(),
+                token = data.Token?.ToLowerInvariant(),
                 value = data.Value
             }, dbTransaction);
         }

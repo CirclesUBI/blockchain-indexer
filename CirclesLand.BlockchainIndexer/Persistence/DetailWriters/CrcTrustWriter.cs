@@ -19,7 +19,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
                     , can_send_to
                     , ""limit""
                 ) values (
-                    @transaction_id, @address, @can_send_to, @limit      
+                    @transaction_id, @address, @can_send_to, @limit::numeric      
                 )
                 returning id;
             ";
@@ -27,8 +27,8 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             return connection.QuerySingle<long>(InsertCrcTrustSql, new
             {
                 transaction_id = transactionId,
-                address = data.Address,
-                can_send_to = data.CanSendTo,
+                address = data.Address?.ToLowerInvariant(),
+                can_send_to = data.CanSendTo?.ToLowerInvariant(),
                 limit = data.Limit
             }, dbTransaction);
         }

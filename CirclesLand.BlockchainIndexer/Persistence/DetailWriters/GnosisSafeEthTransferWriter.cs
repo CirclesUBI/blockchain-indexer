@@ -20,7 +20,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
                     , ""to""
                     , value
                 ) values (
-                    @transaction_id, @initiator, @from, @to, @value
+                    @transaction_id, @initiator, @from, @to, @value::numeric
                 )
                 returning id;
             ";
@@ -28,9 +28,9 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             return connection.QuerySingle<long>(InsertGnosisSafeEthTransferSql, new
             {
                 transaction_id = transactionId,
-                initiator = data.Initiator,
-                from = data.From,
-                to = data.To,
+                initiator = data.Initiator?.ToLowerInvariant(),
+                from = data.From?.ToLowerInvariant(),
+                to = data.To?.ToLowerInvariant(),
                 value = data.Value
             }, dbTransaction);
         }

@@ -109,9 +109,9 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                     @from, 
                     @to, 
                     @index, 
-                    @gas, 
+                    @gas::numeric, 
                     @hash,
-                    @value, 
+                    @value::numeric, 
                     @nonce, 
                     @type, 
                     @input, 
@@ -123,8 +123,8 @@ namespace CirclesLand.BlockchainIndexer.Persistence
             var transactionId = _connection.QuerySingle<long>(InsertTransactionSql, new
             {
                 block_number = transaction.BlockNumber.ToLong(),
-                from = transaction.From,
-                to = transaction.To,
+                from = transaction.From?.ToLowerInvariant(),
+                to = transaction.To?.ToLowerInvariant(),
                 index = (int)transaction.TransactionIndex.ToLong(),
                 gas = transaction.Gas.ToString(),
                 hash = transaction.TransactionHash,

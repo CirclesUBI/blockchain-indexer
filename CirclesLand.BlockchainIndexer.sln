@@ -4,6 +4,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CirclesLand.BlockchainIndex
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CirclesLand.BlockchainIndexer.Tests", "CirclesLand.BlockchainIndexer.Tests\CirclesLand.BlockchainIndexer.Tests.csproj", "{887E8611-0D84-4C0C-A74B-828656BC72E2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CirclesLand.BlockchainIndexer.Api", "CirclesLand.BlockchainIndexer.Api\CirclesLand.BlockchainIndexer.Api.csproj", "{5481AF22-8920-4881-98A3-E09ABF5C69FE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CirclesLand.BlockchainIndexer.Server", "CirclesLand.BlockchainIndexer.Server\CirclesLand.BlockchainIndexer.Server.csproj", "{CF640F5E-A9BA-4574-B482-8A0E9AA6ECDD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CirclesLand.BlockchainIndexer.Util", "CirclesLand.BlockchainIndexer.Util\CirclesLand.BlockchainIndexer.Util.csproj", "{DDCAF9B8-9362-4F98-B477-E5908D9D9EA3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +24,17 @@ Global
 		{887E8611-0D84-4C0C-A74B-828656BC72E2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{887E8611-0D84-4C0C-A74B-828656BC72E2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{887E8611-0D84-4C0C-A74B-828656BC72E2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5481AF22-8920-4881-98A3-E09ABF5C69FE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5481AF22-8920-4881-98A3-E09ABF5C69FE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5481AF22-8920-4881-98A3-E09ABF5C69FE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5481AF22-8920-4881-98A3-E09ABF5C69FE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CF640F5E-A9BA-4574-B482-8A0E9AA6ECDD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CF640F5E-A9BA-4574-B482-8A0E9AA6ECDD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CF640F5E-A9BA-4574-B482-8A0E9AA6ECDD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CF640F5E-A9BA-4574-B482-8A0E9AA6ECDD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DDCAF9B8-9362-4F98-B477-E5908D9D9EA3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DDCAF9B8-9362-4F98-B477-E5908D9D9EA3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DDCAF9B8-9362-4F98-B477-E5908D9D9EA3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DDCAF9B8-9362-4F98-B477-E5908D9D9EA3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

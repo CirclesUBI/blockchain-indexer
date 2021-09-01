@@ -2,7 +2,6 @@
 
     <PropertyGroup>
         <TargetFramework>net5.0</TargetFramework>
-        <OutputType>Exe</OutputType>
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
@@ -11,8 +10,13 @@
       <PackageReference Include="Dapper" Version="2.0.90" />
       <PackageReference Include="Microsoft.Extensions.Hosting" Version="5.0.0" />
       <PackageReference Include="Nethereum.Hex" Version="4.0.5" />
+      <PackageReference Include="Nethereum.JsonRpc.WebSocketClient" Version="4.0.5" />
       <PackageReference Include="Nethereum.Web3" Version="4.0.4" />
       <PackageReference Include="Npgsql" Version="6.0.0-preview6" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\CirclesLand.BlockchainIndexer.Util\CirclesLand.BlockchainIndexer.Util.csproj" />
     </ItemGroup>
 
 </Project>

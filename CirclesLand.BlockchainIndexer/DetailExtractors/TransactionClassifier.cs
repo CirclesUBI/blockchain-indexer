@@ -392,6 +392,11 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                 return false;
             }
 
+            if (transaction.To == null)
+            {
+                return false;
+            }
+
             from = transaction.From;
             to = transaction.To;
             value = transaction.Value;
@@ -402,13 +407,19 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
         public static TransactionClass Classify(Transaction transaction, TransactionReceipt receipt,
             TransactionClass? externalClasses)
         {
+            var isEoaEthTransfer = IsEoaEthTransfer(transaction, receipt, out _, out _, out _);
+            if (!isEoaEthTransfer && receipt.Logs == null)
+            {
+                return TransactionClass.Unknown;
+            }
+            
             var isErc20Transfer = receipt.Logs.Any(o => IsErc20Transfer(o, out _, out _, out _, out _));
             var isCrcSignup = IsCrcSignup(receipt, out _, out _);
             var isCrcOrganisationSignup = receipt.Logs.Any(o => IsCrcOrganisationSignup(o, out _));
             var isCrcHubTransfer = IsCrcHubTransfer(receipt, out _, out _, out _);
             var isCrcTrust = receipt.Logs.Any(o => IsCrcTrust(o, out _, out _, out _));
             var isSafeEthTransfer = IsSafeEthTransfer(transaction, receipt, out _, out _, out _, out _);
-            var isEoaEthTransfer = IsEoaEthTransfer(transaction, receipt, out _, out _, out _);
+            
 
             var classification = TransactionClass.Unknown;
             if (isErc20Transfer)

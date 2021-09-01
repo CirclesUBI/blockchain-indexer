@@ -19,7 +19,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
                     , ""to""
                     , value
                 ) values (
-                    @transaction_id, @from, @to, @value
+                    @transaction_id, @from, @to, @value::numeric
                 )
                 returning Id;
             ";
@@ -27,8 +27,8 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             return connection.QuerySingle<long>(InsertCrcTransferSql, new
             {
                 transaction_id = transactionId,
-                from = data.From,
-                to = data.To,
+                from = data.From?.ToLowerInvariant(),
+                to = data.To?.ToLowerInvariant(),
                 value = data.Value
             }, dbTransaction);
         }
