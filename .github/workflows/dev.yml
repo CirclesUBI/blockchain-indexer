@@ -23,7 +23,6 @@ jobs:
           DOCKER_REGISTRY_USER: ${{secrets.DOCKER_REGISTRY_USER}}
           DOCKER_REGISTRY_PASSWORD: ${{secrets.DOCKER_REGISTRY_PASSWORD}}
         run: |
-          cd CirclesLand.BlockchainIndexer.Server
           docker login https://ghcr.io -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASSWORD
           docker build . --tag ghcr.io/circlesland/blockchain-indexer-dev:latest --tag ghcr.io/circlesland/blockchain-indexer-dev:${{fromJson(steps.readPackageJson.outputs.packageJson).version}} --tag pathfinder-server-dev --tag dev
           docker push ghcr.io/circlesland/blockchain-indexer-dev:${{fromJson(steps.readPackageJson.outputs.packageJson).version}}
