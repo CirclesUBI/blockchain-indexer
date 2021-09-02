@@ -1,7 +1,7 @@
 using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using CirclesLand.BlockchainIndexer.Api;
 using CirclesLand.BlockchainIndexer.Util;
@@ -17,21 +17,52 @@ namespace CirclesLand.BlockchainIndexer.Server
 {
     public class Program
     {
-        const string RpcUrl = "wss://rpc.circles.land/";
-
-        public const string ConnectionString =
-            @"Server=localhost;Port=5432;Database=circles_land_worker;User ID=postgres;Password=postgres;";
-
         public static async Task Main(string[] args)
         {
-            var indexer = new Indexer(ConnectionString, RpcUrl);
+            var validationErrors = new List<string>();
+            var connectionString = Environment.GetEnvironmentVariable("indexer_connection_string");
+            try
+            {
+                var csb = new NpgsqlConnectionStringBuilder(connectionString);
+                if (string.IsNullOrWhiteSpace(csb.Host))
+                    validationErrors.Add("The connection string contains no 'Server'");
+                if (string.IsNullOrWhiteSpace(csb.Username))
+                    validationErrors.Add("The connection string contains no 'User ID'");
+                if (string.IsNullOrWhiteSpace(csb.Database))
+                    validationErrors.Add("The connection string contains no 'Database'");
+            }
+            catch (Exception ex)
+            {
+                validationErrors.Add("The connection string is not valid:");
+                validationErrors.Add(ex.Message);
+            }
+
+            if (!Uri.TryCreate(Environment.GetEnvironmentVariable("indexer_rpc_gateway_url"), UriKind.Absolute, 
+                out var rpcGatewayUri))
+            {
+                validationErrors.Add("Couldn't parse the 'indexer_rpc_gateway_url' environment variable. Expected 'System.Uri'.");
+            }
+            if (!ushort.TryParse(Environment.GetEnvironmentVariable("indexer_websocket_port"),
+                out var websocketPort))
+            {
+                validationErrors.Add("Couldn't parse the 'indexer_websocket_port' environment variable. Expected 'ushort'.");
+            }
+
+            if (validationErrors.Count > 0)
+            {
+                throw new ArgumentException(string.Join(Environment.NewLine, validationErrors));
+            }
+
+            Debug.Assert(rpcGatewayUri != null, nameof(rpcGatewayUri) + " != null");
+            
+            var indexer = new Indexer(connectionString!, rpcGatewayUri.ToString());
             indexer.NewBlock += (s, e) =>
             {
                 Task.Run(() =>
                 {
                     try
                     {
-                        using var connection = new NpgsqlConnection(ConnectionString);
+                        using var connection = new NpgsqlConnection(connectionString);
                         connection.Open();
 
                         var safes = connection.Query(
@@ -74,6 +105,7 @@ namespace CirclesLand.BlockchainIndexer.Server
                 });
             };
             
+            // TODO: Use cancellation token
             indexer.Run();
 
             Host.CreateDefaultBuilder(args)

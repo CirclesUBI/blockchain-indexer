@@ -16,7 +16,7 @@ create table transaction (
     id bigserial primary key,
     block_number bigint not null references block(number),
     "from" text not null,
-    "to" text null, -- Todo: This happens only on contract creation. Get the address of the deployed contact.
+    "to" text null, -- Todo: NULL happens only on contract creation. Get the address of the deployed contact.
     index int not null,
     gas numeric not null,
     hash text unique not null,
@@ -502,105 +502,6 @@ begin
 end
 $yolo$
 language plpgsql;
-/*
-create or replace function on_crc_hub_transfer()
-    returns trigger as
-$yolo$
-begin
-    call publish_event('new_event', (jsonb '{"$type":"crc_hub_transfer"}' || row_to_json(new)::jsonb)::text);
-    return new;
-end
-$yolo$
-language plpgsql;
-
-create trigger crc_hub_transfer_trigger
-    after insert
-    on crc_hub_transfer
-    for each row
-execute procedure on_crc_hub_transfer();
-
-create or replace function on_crc_organisation_signup()
-    returns trigger as
-$yolo$
-begin
-    call publish_event('new_event', (jsonb '{"$type":"crc_organisation_signup"}' || row_to_json(new)::jsonb)::text);
-    return new;
-end;
-$yolo$
-language plpgsql;
-
-create trigger crc_organisation_signup_trigger
-    after insert
-    on crc_organisation_signup
-    for each row
-execute procedure on_crc_organisation_signup();
-
-create or replace function on_crc_signup()
-    returns trigger as
-$yolo$
-begin
-    call publish_event('new_event', (jsonb '{"$type":"crc_signup"}' || row_to_json(new)::jsonb)::text);
-    return new;
-end;
-$yolo$
-language plpgsql;
-
-create trigger crc_signup_trigger
-    after insert
-    on crc_signup
-    for each row
-execute procedure on_crc_signup();
-
-create or replace function on_erc20_transfer()
-    returns trigger as
-$yolo$
-begin
-    if ((select count(*) from crc_signup where token = new.token limit 1) = 1
-        and new."from" = '0x0000000000000000000000000000000000000000') then
-        call publish_event('new_event', (jsonb '{"$type":"crc_minting"}' || row_to_json(new)::jsonb)::text);
-    end if;
-    return new;
-end
-$yolo$
-language plpgsql;
-
-create trigger erc20_transfer_trigger
-    after insert
-    on erc20_transfer
-    for each row
-    execute procedure on_erc20_transfer();
-
-create or replace function on_eth_transfer()
-    returns trigger as
-$yolo$
-begin
-    call publish_event('new_event', (jsonb '{"$type":"eth_transfer"}' || row_to_json(new)::jsonb)::text);
-    return new;
-end;
-$yolo$
-language plpgsql;
-
-create trigger eth_transfer_trigger
-    after insert
-    on eth_transfer
-    for each row
-execute procedure on_eth_transfer();
-
-create or replace function on_gnosis_safe_eth_transfer()
-    returns trigger as
-$yolo$
-begin
-    call publish_event('new_event', (jsonb '{"$type":"gnosis_safe_eth_transfer"}' || row_to_json(new)::jsonb)::text);
-    return new;
-end;
-$yolo$
-language plpgsql;
-
-create trigger gnosis_safe_eth_transfer_trigger
-    after insert
-    on gnosis_safe_eth_transfer
-    for each row
-execute procedure on_gnosis_safe_eth_transfer();
 
 /*
 create table transaction_log (
@@ -620,24 +521,4 @@ create table transaction_log_topic (
     transactionLogId bigint not null references transaction_log (id),
     topic text not null references log_topic (topic)
 );
-
-
-CREATE OR REPLACE FUNCTION employee_insert_trigger_fnc()
-  RETURNS trigger AS
-$$
-BEGIN
-
-    INSERT INTO "Employee_Audit" ( "EmployeeId", "LastName", "FirstName","UserName" ,"EmpAdditionTime")
-         VALUES(NEW."EmployeeId",NEW."LastName",NEW."FirstName",current_user,current_date);
-
-RETURN NEW;
-END;
-$$
-LANGUAGE 'plpgsql';
-
-CREATE TRIGGER employee_insert_trigger
-  AFTER INSERT
-  ON "Employee"
-  FOR EACH ROW
-  EXECUTE PROCEDURE employee_insert_trigger_fnc();
 */
