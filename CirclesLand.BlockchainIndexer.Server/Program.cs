@@ -111,7 +111,7 @@ namespace CirclesLand.BlockchainIndexer.Server
             Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    webBuilder.UseUrls(@"http://localhost:8080/");
+                    webBuilder.UseUrls(@$"http://localhost:{websocketPort}/");
                     webBuilder.UseStartup<Startup>();
                 })
                 .Build()
