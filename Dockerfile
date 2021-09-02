@@ -15,8 +15,11 @@ RUN cd CirclesLand.BlockchainIndexer.Server && dotnet publish "CirclesLand.Block
 FROM base AS final
 LABEL org.opencontainers.image.source=https://github.com/circlesland/blockchain-indexer
 ENV DOTNET_EnableDiagnostics=0
+ENV INDEXER_RPC_GATEWAY_URL ''
+ENV INDEXER_CONNECTION_STRING ''
+ENV INDEXER_WEBSOCKET_PORT='8675'
 WORKDIR /app
-EXPOSE 7891
+EXPOSE 8675
 COPY --from=publish /app/publish .
-RUN chmod +x ./CirclesLand.BlockchainIndexer.Server.dll
-ENTRYPOINT ["dotnet", "CirclesLand.BlockchainIndexer.Server.dll"]
+RUN chmod +x ./CirclesLand.BlockchainIndexer.Server
+ENTRYPOINT ["./CirclesLand.BlockchainIndexer.Server"]

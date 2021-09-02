@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -20,7 +21,7 @@ namespace CirclesLand.BlockchainIndexer.Server
         public static async Task Main(string[] args)
         {
             var validationErrors = new List<string>();
-            var connectionString = Environment.GetEnvironmentVariable("indexer_connection_string");
+            var connectionString = Environment.GetEnvironmentVariable("INDEXER_CONNECTION_STRING");
             try
             {
                 var csb = new NpgsqlConnectionStringBuilder(connectionString);
@@ -37,15 +38,15 @@ namespace CirclesLand.BlockchainIndexer.Server
                 validationErrors.Add(ex.Message);
             }
 
-            if (!Uri.TryCreate(Environment.GetEnvironmentVariable("indexer_rpc_gateway_url"), UriKind.Absolute, 
+            if (!Uri.TryCreate(Environment.GetEnvironmentVariable("INDEXER_RPC_GATEWAY_URL"), UriKind.Absolute, 
                 out var rpcGatewayUri))
             {
-                validationErrors.Add("Couldn't parse the 'indexer_rpc_gateway_url' environment variable. Expected 'System.Uri'.");
+                validationErrors.Add("Couldn't parse the 'INDEXER_RPC_GATEWAY_URL' environment variable. Expected 'System.Uri'.");
             }
-            if (!ushort.TryParse(Environment.GetEnvironmentVariable("indexer_websocket_port"),
+            if (!ushort.TryParse(Environment.GetEnvironmentVariable("INDEXER_WEBSOCKET_PORT"),
                 out var websocketPort))
             {
-                validationErrors.Add("Couldn't parse the 'indexer_websocket_port' environment variable. Expected 'ushort'.");
+                validationErrors.Add("Couldn't parse the 'INDEXER_WEBSOCKET_PORT' environment variable. Expected 'ushort'.");
             }
 
             if (validationErrors.Count > 0)
