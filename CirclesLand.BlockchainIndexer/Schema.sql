@@ -231,23 +231,26 @@ create index idx_gnosis_safe_eth_transfer_to on gnosis_safe_eth_transfer("to") i
 create or replace procedure delete_incomplete_blocks()
 as
 $yolo$
+declare
+    first_corrupt_block bigint;
 begin
-    delete from crc_hub_transfer where transaction_id in (select id from transaction where block_number >= (select block_no from first_incomplete_block limit 1));
-    delete from crc_organisation_signup where transaction_id in (select id from transaction where block_number >= (select block_no from first_incomplete_block limit 1));
-    delete from crc_signup where transaction_id in (select id from transaction where block_number >= (select block_no from first_incomplete_block limit 1));
-    delete from crc_trust where transaction_id in (select id from transaction where block_number >= (select block_no from first_incomplete_block limit 1));
-    delete from erc20_transfer where transaction_id in (select id from transaction where block_number >= (select block_no from first_incomplete_block limit 1));
-    delete from eth_transfer where transaction_id in (select id from transaction where block_number >= (select block_no from first_incomplete_block limit 1));
-    delete from gnosis_safe_eth_transfer where transaction_id in (select id from transaction where block_number >= (select block_no from first_incomplete_block limit 1));
-    delete from transaction where block_number >= (select block_no from first_incomplete_block limit 1);
-    delete from block where number >= (select block_no from first_incomplete_block limit 1);
+    select block_no into first_corrupt_block  from first_incomplete_block;
+    delete from crc_hub_transfer where transaction_id in (select id from transaction where block_number >= first_corrupt_block);
+    delete from crc_organisation_signup where transaction_id in (select id from transaction where block_number >= first_corrupt_block);
+    delete from crc_signup where transaction_id in (select id from transaction where block_number >= first_corrupt_block);
+    delete from crc_trust where transaction_id in (select id from transaction where block_number >= first_corrupt_block);
+    delete from erc20_transfer where transaction_id in (select id from transaction where block_number >= first_corrupt_block);
+    delete from eth_transfer where transaction_id in (select id from transaction where block_number >= first_corrupt_block);
+    delete from gnosis_safe_eth_transfer where transaction_id in (select id from transaction where block_number >= first_corrupt_block);
+    delete from transaction where block_number >= first_corrupt_block;
+    delete from block where number >= first_corrupt_block;
 end
 $yolo$
 language plpgsql;
 
 create function safe_timeline(safe_address text)
     returns table(
-                     block_number bigint
+        block_number bigint
         , "timestamp" timestamp
         , type text
         , direction text
