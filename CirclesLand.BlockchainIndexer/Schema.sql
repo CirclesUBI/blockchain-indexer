@@ -184,8 +184,11 @@ create index idx_crc_trust_fk_transaction_id on crc_trust(transaction_id);
 create view crc_current_trust
 as
     select lte.address as "user",
+           cs_a.id as user_id,
            cs_a.token user_token,
            lte.can_send_to,
+           cs_b.id can_send_to_id,
+           cs_b.token can_send_to_token,
            ct."limit",
            lte.history_count
     from (
@@ -197,7 +200,8 @@ as
              group by address,
                       can_send_to) lte
     join crc_trust ct on lte.transaction_id = ct.transaction_id
-    join crc_signup cs_a on lte.address = cs_a."user";
+    join crc_signup cs_a on lte.address = cs_a."user"
+    join crc_signup cs_b on lte.can_send_to = cs_b."user";
 
 create table eth_transfer (
     id bigserial primary key,

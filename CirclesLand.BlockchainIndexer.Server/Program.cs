@@ -43,10 +43,10 @@ namespace CirclesLand.BlockchainIndexer.Server
             {
                 validationErrors.Add("Couldn't parse the 'INDEXER_RPC_GATEWAY_URL' environment variable. Expected 'System.Uri'.");
             }
-            if (!ushort.TryParse(Environment.GetEnvironmentVariable("INDEXER_WEBSOCKET_PORT"),
-                out var websocketPort))
+            if (!Uri.TryCreate(Environment.GetEnvironmentVariable("INDEXER_WEBSOCKET_URL"), UriKind.Absolute,
+                out var websocketUrl))
             {
-                validationErrors.Add("Couldn't parse the 'INDEXER_WEBSOCKET_PORT' environment variable. Expected 'ushort'.");
+                validationErrors.Add("Couldn't parse the 'INDEXER_WEBSOCKET_URL' environment variable. Expected 'System.Uri'.");
             }
 
             if (validationErrors.Count > 0)
@@ -112,7 +112,7 @@ namespace CirclesLand.BlockchainIndexer.Server
             Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    webBuilder.UseUrls(@$"http://localhost:{websocketPort}/");
+                    webBuilder.UseUrls(@$"{websocketUrl}");
                     webBuilder.UseStartup<Startup>();
                 })
                 .Build()
