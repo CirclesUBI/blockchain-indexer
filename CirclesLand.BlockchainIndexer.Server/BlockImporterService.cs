@@ -45,7 +45,7 @@ namespace CirclesLand.BlockchainIndexer.Server
 
                 _lastProcessedBlock = currentBlock;
 
-                await Participant.SetSignal(false, "publish", payload);
+                await Participant.SetSignal(true, "publish", payload);
 
                 /*
                 Console.WriteLine("------------------------------------------------");

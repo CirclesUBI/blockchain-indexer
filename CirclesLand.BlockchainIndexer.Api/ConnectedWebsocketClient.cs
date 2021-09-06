@@ -27,6 +27,8 @@ namespace CirclesLand.BlockchainIndexer.Api
                 _client = client;
             }
 
+            private string? _lastMessage = null;
+            
             public async override Task OnStart(CancellationToken cancellationToken)
             {
                 Task.Run(async () =>
@@ -36,8 +38,13 @@ namespace CirclesLand.BlockchainIndexer.Api
                         var value = await Participant.WaitForServiceSignalValue(null, "publish",
                             TimeSpan.FromSeconds(1), cancellationToken);
 
-                        await _client.SendMessage(value);
+                        if (value != null && value != _lastMessage)
+                        {
+                            await _client.SendMessage(value);
+                            _lastMessage = value;
+                        }
                     }
+                    Logger.LogWarning("Websocket loop ended");   
                 });
                 
                 Logger.LogInformation($"Websocket client {Participant.InstanceId} started.");

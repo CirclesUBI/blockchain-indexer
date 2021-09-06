@@ -15,11 +15,6 @@ drop table signal;
 drop table lock;
 drop table service;
 
-create table event_id (
-    id bigserial
-);
-insert into event_id values (1);
-
 create table service (
     id text primary key,
     host_id text not null,
@@ -152,7 +147,7 @@ begin
     on conflict(id) do update set timeout_at = register_service.timeout_at;
     
     select json_build_object('timestamp', now
-                           , 'id', next_event_id()
+                           , 'id', extract(microseconds from now())
                            , 'type', 'connected'
                            , 'service_id', register_service.service_id
                            , 'host_id', register_service.host_id
@@ -179,7 +174,7 @@ begin
     where s.id = delete_service.service_id;
 
     select json_build_object('timestamp', now()
-                           , 'id', next_event_id()
+                           , 'id', extract(microseconds from now())
                            , 'type', 'disconnected'
                            , 'service_id', delete_service.service_id) into event_json;
 
@@ -204,7 +199,7 @@ begin
     on conflict on constraint uc_signal_name_service_id  do update set value = set_signal.value;
 
     select json_build_object('timestamp', now
-                           , 'id', next_event_id()
+                           , 'id', extract(microseconds from now())
                            , 'is_primary', is_primary
                            , 'service_id', set_signal.service_id
                            , 'name', set_signal.name

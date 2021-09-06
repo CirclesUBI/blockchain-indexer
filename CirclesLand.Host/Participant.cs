@@ -171,7 +171,7 @@ namespace CirclesLand.Host
                 {
                     taskToComplete1.SetResult(signalValue);
                 }
-
+                
                 if (waitingTask.Key.serviceId == null)
                 {
                     continue;
@@ -220,11 +220,6 @@ namespace CirclesLand.Host
         {
             dynamic o = JObject.Parse(e.Payload);
             long id = o.id;
-            if (id <= _lastEventId)
-            {
-                return;
-            }
-            _lastEventId = id;
             
             DateTime timestamp = o.timestamp;
             string serviceId = o.service_id;
@@ -258,18 +253,11 @@ namespace CirclesLand.Host
                 "A component of the Participant encountered an error. See inner exception for details.",
                 _lastError);
         }
-
-        private long _lastEventId = 0;
         
         private void OnServiceEvent(object sender, NpgsqlNotificationEventArgs e)
         {
             dynamic o = JObject.Parse(e.Payload);
             long id = o.id;
-            if (id <= _lastEventId)
-            {
-                return;
-            }
-            _lastEventId = id;
             
             var timestamp = (DateTime) o.timestamp;
             var type = (string) o.type;
@@ -280,14 +268,16 @@ namespace CirclesLand.Host
             var previousServices = KnownInstances.Keys.ToHashSet();
             if (type == "connected" && timeoutAt != null)
             {
-                KnownInstances.TryRemove(serviceId, out var oldTimeout);
-                if (oldTimeout != DateTime.MinValue && oldTimeout < now)
+                if (KnownInstances.TryRemove(serviceId, out var oldTimeout))
                 {
-                    Console.WriteLine(
-                        $"Warning: Service '{serviceId}' timed out at {oldTimeout} before it just re-appeared at {now} with new timeout at {timeoutAt}.");
-                }
+                    if (oldTimeout != DateTime.MinValue && oldTimeout < now)
+                    {
+                        Console.WriteLine(
+                            $"Warning: Service '{serviceId}' timed out at {oldTimeout} before it just re-appeared at {now} with new timeout at {timeoutAt}.");
+                    }
 
-                KnownInstances.TryAdd(serviceId, timeoutAt.Value);
+                    KnownInstances.TryAdd(serviceId, timeoutAt.Value);
+                }
             }
             else if (type == "disconnected")
             {
@@ -332,6 +322,7 @@ namespace CirclesLand.Host
                 var previousCount = KnownInstances.Count;
 
                 KnownInstances
+                    .ToArray()
                     .Where(o => o.Value <= now)
                     .Select(o => o.Key)
                     .ToList()
