@@ -10,7 +10,7 @@ namespace CirclesLand.Host
     public abstract class PrimaryWorkerService : ParticipantHostedService
     {
         protected bool IsPrimary => _primaryServiceId == Participant.InstanceId;
-        
+
         private string _primaryServiceId;
         private Timer? _refreshPrimaryLockTimer;
         private CancellationTokenSource _serverLoopCancellationSource = new();
@@ -18,13 +18,13 @@ namespace CirclesLand.Host
         public abstract string PrimaryLockName { get; }
         public abstract bool CanEmit { get; }
         public abstract bool CanProcess { get; }
-        
+
         public PrimaryWorkerService(
             string prefix,
-            IHostApplicationLifetime applicationLifetime, 
-            ILogger<ParticipantHostedService> logger) 
+            IHostApplicationLifetime applicationLifetime,
+            ILogger<ParticipantHostedService> logger)
             : base(prefix, applicationLifetime, logger)
-        {      
+        {
         }
 
         protected abstract Task<string> Emit(CancellationToken cancellationToken);
@@ -38,33 +38,32 @@ namespace CirclesLand.Host
                 {
                     continue;
                 }
+
                 await Participant.SetSignal(true, "work", value);
-                
+
                 Logger.LogInformation($"{Participant.InstanceId} emitted {value}");
             }
         }
-        
+
         protected abstract Task Process(string payload, CancellationToken cancellationToken);
 
         protected virtual async Task ProcessInternal(CancellationToken cancellationToken)
         {
             DateTime? lastTaskAt = null;
             var idleYieldInterval = TimeSpan.FromSeconds(1);
-            
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 if (_primaryServiceId != null && !Participant.KnownInstances.ContainsKey(_primaryServiceId))
                 {
-                    Logger.LogWarning("{0} died unexpectedly.",
-                        Participant.InstanceId,
+                    Logger.LogWarning("Primary service '{0}' died unexpectedly.",
                         _primaryServiceId);
 
                     _primaryServiceId = null;
+                    await Task.Delay(1000, cancellationToken);
+                    break;
                 }
-                
-                Logger.LogDebug("{0} is waiting for 'work' signals from '{1} ..",
-                    Participant.InstanceId,
-                    _primaryServiceId);
+
 
                 if (lastTaskAt != null && DateTime.UtcNow - lastTaskAt > idleYieldInterval)
                 {
@@ -73,6 +72,10 @@ namespace CirclesLand.Host
 
                 if (_primaryServiceId != null)
                 {
+                    Logger.LogInformation("{0} is waiting for 'work' signals from '{1} ..",
+                        Participant.InstanceId,
+                        _primaryServiceId);
+
                     var signalValueOrNull = await Participant.WaitForServiceSignalValue(
                         _primaryServiceId,
                         "work",
@@ -114,94 +117,95 @@ namespace CirclesLand.Host
         }
 
         public override async Task OnStart(CancellationToken cancellationToken)
-        { 
+        {
             if (!CanEmit && !CanProcess)
             {
                 throw new Exception($"{GetType().Name} cannot emit and cannot process. The implementation is invalid.");
             }
-            
+
             var linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
                 _serverLoopCancellationSource.Token,
                 cancellationToken);
-            
-            #pragma warning disable 4014
+
+#pragma warning disable 4014
             Task.Run(async () =>
-            {
-                while (!linkedCancellationTokenSource.Token.IsCancellationRequested)
                 {
-                    if (CanEmit)
+                    while (!linkedCancellationTokenSource.Token.IsCancellationRequested)
                     {
-                        _primaryServiceId = await Participant.RaceForPrimaryNode(cancellationToken, PrimaryLockName);
-                    }
-                    
-                    if (_primaryServiceId != Participant.InstanceId 
-                        && CanProcess)
-                    {
-                        if (_primaryServiceId == null)
+                        if (CanEmit)
+                        {
+                            _primaryServiceId =
+                                await Participant.RaceForPrimaryNode(cancellationToken, PrimaryLockName);
+                        }
+                        else
                         {
                             _primaryServiceId = await Participant.TryGetLockOwner(PrimaryLockName);
-                            await Task.Delay(100, linkedCancellationTokenSource.Token);
                         }
-                        
+
                         if (_primaryServiceId == null)
                         {
                             Logger.LogWarning(
-                                "{0} is waiting for a '{1}' instance. Retrying in 500 ms", 
-                                Participant.InstanceId, 
+                                "{0} is waiting for a '{1}' instance. Retrying in 500 ms",
+                                Participant.InstanceId,
                                 PrimaryLockName);
-                            
+
                             await Task.Delay(500, linkedCancellationTokenSource.Token);
-                            
+
                             continue;
                         }
-                    }
 
-                    if (CanProcess && CanEmit)
-                    {
-                        Logger.LogInformation("{0} is running as '{1}'."
-                            , Participant.InstanceId
-                            , IsPrimary ? PrimaryLockName : "worker");
-                    }
-                    else if (CanProcess)
-                    {
-                        Logger.LogInformation("{0} is running as '{1}'."
-                            , Participant.InstanceId
-                            , "worker");
-                    }
-                    else if (CanEmit)
-                    {
-                        Logger.LogInformation("{0} is running as '{1}'."
-                            , Participant.InstanceId
-                            , IsPrimary ? PrimaryLockName : "primary (standby)");
-                    }
 
-                    if (IsPrimary)
-                    {
-                        try
+                        if (CanProcess && CanEmit)
+                        {
+                            Logger.LogInformation("{0} is running as '{1}'."
+                                , Participant.InstanceId
+                                , IsPrimary ? PrimaryLockName : "worker");
+                        }
+                        else if (CanProcess)
+                        {
+                            Logger.LogInformation("{0} is running as '{1}'."
+                                , Participant.InstanceId
+                                , "worker");
+                        }
+                        else if (CanEmit)
+                        {
+                            Logger.LogInformation("{0} is running as '{1}'."
+                                , Participant.InstanceId
+                                , IsPrimary ? PrimaryLockName : "primary (standby)");
+                        }
+
+                        if (IsPrimary && CanEmit)
+                        {
+                            try
+                            {
+                                linkedCancellationTokenSource.Token.ThrowIfCancellationRequested();
+                                await new KeepAliveLock(Participant, PrimaryLockName, Logger)
+                                    .RunWithLock(
+                                        () => EmitInternal(linkedCancellationTokenSource.Token)
+                                        , TimeSpan.Zero);
+                            }
+                            catch (CouldNotAcquireLockException)
+                            {
+                                Logger.LogWarning($"{Participant.InstanceId} lost the 'primary' lock.");
+                            }
+                        }
+                        else if (!IsPrimary && CanProcess)
                         {
                             linkedCancellationTokenSource.Token.ThrowIfCancellationRequested();
-                            await new KeepAliveLock(Participant, PrimaryLockName, Logger)
-                                .RunWithLock(
-                                    () => EmitInternal(linkedCancellationTokenSource.Token)
-                                    , TimeSpan.Zero);
-                        }
-                        catch (CouldNotAcquireLockException)
-                        {
-                            Logger.LogWarning($"{Participant.InstanceId} lost the 'primary' lock.");
+                            await ProcessInternal(linkedCancellationTokenSource.Token);
+
+                            if (_primaryServiceId == null)
+                            {
+                                
+                            }
                         }
                     }
-                    else if (CanProcess)
-                    {
-                        linkedCancellationTokenSource.Token.ThrowIfCancellationRequested();
-                        await ProcessInternal(linkedCancellationTokenSource.Token);
-                    }
-                }
-            }, linkedCancellationTokenSource.Token)
+                }, linkedCancellationTokenSource.Token)
                 .ContinueWith(t =>
 #pragma warning restore 4014
                 {
                     if (t.Exception == null) return;
-                    
+
                     Logger.LogError(t.Exception, "A fatal error occurred:");
                     ApplicationLifetime.StopApplication();
                 }, cancellationToken);
