@@ -53,14 +53,13 @@ namespace CirclesLand.Host
             
             while (!cancellationToken.IsCancellationRequested)
             {
-                if (!Participant.KnownInstances.ContainsKey(_primaryServiceId))
+                if (_primaryServiceId != null && !Participant.KnownInstances.ContainsKey(_primaryServiceId))
                 {
                     Logger.LogWarning("{0} died unexpectedly.",
                         Participant.InstanceId,
                         _primaryServiceId);
 
                     _primaryServiceId = null;
-                    break;
                 }
                 
                 Logger.LogDebug("{0} is waiting for 'work' signals from '{1} ..",
@@ -71,42 +70,45 @@ namespace CirclesLand.Host
                 {
                     break;
                 }
-                
-                var signalValueOrNull = await Participant.WaitForServiceSignalValue(
-                    _primaryServiceId,
-                    "work",
-                    idleYieldInterval,
-                    cancellationToken);
 
-                if (signalValueOrNull != null)
+                if (_primaryServiceId != null)
                 {
-                    Logger.LogInformation($"Processing task {signalValueOrNull} ...");
+                    var signalValueOrNull = await Participant.WaitForServiceSignalValue(
+                        _primaryServiceId,
+                        "work",
+                        idleYieldInterval,
+                        cancellationToken);
 
-                    try
+                    if (signalValueOrNull != null)
                     {
-                        new KeepAliveLock(Participant, signalValueOrNull, Logger)
-                            .RunWithLock(async () => await Process(signalValueOrNull, cancellationToken),
-                                TimeSpan.Zero,
-                                cancellationToken)
-                            .Wait(cancellationToken);
-                    }
-                    catch (AggregateException ex)
-                        when (ex.InnerExceptions.SingleOrDefault(o => o is TaskCanceledException) != null)
-                    {
-                        Logger.LogWarning("The processing of task '{0}' was cancelled.");
-                    }
-                    catch (AggregateException ex)
-                        when (ex.InnerExceptions.SingleOrDefault(o => o is CouldNotAcquireLockException) != null)
-                    {
-                        Logger.LogInformation("Another process took task {0}.", signalValueOrNull);
-                    }
+                        Logger.LogInformation($"Processing task {signalValueOrNull} ...");
 
-                    Logger.LogDebug("Processing round finished.");
-                    lastTaskAt = DateTime.UtcNow;
-                }
-                else
-                {
-                    Logger.LogDebug("Processing round finished without a task.");
+                        try
+                        {
+                            new KeepAliveLock(Participant, signalValueOrNull, Logger)
+                                .RunWithLock(async () => await Process(signalValueOrNull, cancellationToken),
+                                    TimeSpan.Zero,
+                                    cancellationToken)
+                                .Wait(cancellationToken);
+                        }
+                        catch (AggregateException ex)
+                            when (ex.InnerExceptions.SingleOrDefault(o => o is TaskCanceledException) != null)
+                        {
+                            Logger.LogWarning("The processing of task '{0}' was cancelled.");
+                        }
+                        catch (AggregateException ex)
+                            when (ex.InnerExceptions.SingleOrDefault(o => o is CouldNotAcquireLockException) != null)
+                        {
+                            Logger.LogInformation("Another process took task {0}.", signalValueOrNull);
+                        }
+
+                        Logger.LogDebug("Processing round finished.");
+                        lastTaskAt = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        Logger.LogDebug("Processing round finished without a task.");
+                    }
                 }
             }
         }
@@ -138,6 +140,7 @@ namespace CirclesLand.Host
                         if (_primaryServiceId == null)
                         {
                             _primaryServiceId = await Participant.TryGetLockOwner(PrimaryLockName);
+                            await Task.Delay(100, linkedCancellationTokenSource.Token);
                         }
                         
                         if (_primaryServiceId == null)
