@@ -1,5 +1,7 @@
 using System;
 using CirclesLand.BlockchainIndexer.Api;
+using CirclesLand.BlockchainIndexer.Server;
+using CirclesLand.Host;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,10 +14,10 @@ namespace KestrelWebSocketServer
         public void ConfigureServices(IServiceCollection services)
         {
             // register our custom middleware since we use the IMiddleware factory approach
-            services.AddTransient<WebsocketServer>();
-
-            // register the background process to periodically send a timestamp to clients
-            // services.AddHostedService<BroadcastTimestamp>();
+            services.AddTransient<WebsocketService>();
+            // services.AddHostedService<IndexerService>();
+            services.AddHostedService<BlockSourceService>();
+            services.AddHostedService<BlockImporterService>();
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -28,7 +30,7 @@ namespace KestrelWebSocketServer
             });
 
             // add our custom middleware to the pipeline
-            app.UseMiddleware<WebsocketServer>();
+            app.UseMiddleware<WebsocketService>();
         }
     }
 }

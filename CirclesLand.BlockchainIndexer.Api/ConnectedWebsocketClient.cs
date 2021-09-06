@@ -6,26 +6,77 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CirclesLand.BlockchainIndexer.Util;
+using CirclesLand.Host;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace CirclesLand.BlockchainIndexer.Api
 {
-    public class ConnectedClient
+    public class ConnectedWebsocketClient
     {
+        class WebsocketServiceParticipantImpl : ParticipantHostedService
+        {
+            private long _lastProcessedBlock = 0;
+            private ConnectedWebsocketClient _client;
+
+            public WebsocketServiceParticipantImpl(IHostApplicationLifetime applicationLifetime,
+                ILogger logger,
+                ConnectedWebsocketClient client)
+                : base(nameof(ConnectedWebsocketClient), applicationLifetime, logger)
+            {
+                _client = client;
+            }
+
+            public async override Task OnStart(CancellationToken cancellationToken)
+            {
+                Task.Run(async () =>
+                {
+                    while (!cancellationToken.IsCancellationRequested)
+                    {
+                        var value = await Participant.WaitForServiceSignalValue(null, "publish",
+                            TimeSpan.FromSeconds(1), cancellationToken);
+
+                        await _client.SendMessage(value);
+                    }
+                });
+                
+                Logger.LogInformation($"Websocket client {Participant.InstanceId} started.");
+            }
+
+            public async override Task OnStop(CancellationToken cancellationToken)
+            {
+                Logger.LogInformation($"Websocket client {Participant.InstanceId} stopped.");
+            }
+        }
+
+        private readonly WebsocketServiceParticipantImpl _implementation;
+        
         public int SocketId { get; }
         public WebSocket Socket { get; }
         public TaskCompletionSource<object> TaskCompletion { get; }
+
+        private CancellationTokenSource _end = new();
         
-        public ConnectedClient(
+        public ConnectedWebsocketClient(
             int socketId, 
+            IHostApplicationLifetime applicationLifetime,
+            ILogger logger,
             WebSocket socket, 
             CancellationToken cancellationToken,
             TaskCompletionSource<object> taskCompletion)
         {
+            var linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
+                _end.Token,
+                cancellationToken);
+            
+            _implementation = new WebsocketServiceParticipantImpl(applicationLifetime, logger, this);
+            _implementation.StartAsync(linkedCancellationTokenSource.Token);
+            
             SocketId = socketId;
             Socket = socket;
             TaskCompletion = taskCompletion;
             
-            Task.Run(() => ReceiveLoop(this, cancellationToken));
+            Task.Run(() => ReceiveLoop(this, linkedCancellationTokenSource.Token));
         }
 
         private const int BufferSize = 4096;
@@ -43,7 +94,7 @@ namespace CirclesLand.BlockchainIndexer.Api
             return ret;
         }
         
-        private async Task ReceiveLoop(ConnectedClient client, CancellationToken cancellationToken)
+        private async Task ReceiveLoop(ConnectedWebsocketClient client, CancellationToken cancellationToken)
         {
             var socket = client.Socket;
             try
@@ -81,14 +132,6 @@ namespace CirclesLand.BlockchainIndexer.Api
                     var messageBytes = ConcatByteArrays(chunks.ToArray());
                     var messageString = Encoding.UTF8.GetString(messageBytes);
                     OnReceivedMessage(messageString);
-
-                    /*
-                    var request = JsonConvert.DeserializeObject<RpcCall>(messageString);
-                    request.SocketId = client.SocketId;
-
-                    var transactionIndexerSystem = TransactionIndexerSystem.System.Value;
-                    transactionIndexerSystem.EventStream.Publish(request);
-                    */
                 }
             }
             catch (OperationCanceledException)
@@ -103,6 +146,8 @@ namespace CirclesLand.BlockchainIndexer.Api
             }
             finally
             {
+                _end.Cancel();
+                
                 Console.WriteLine($"Socket {client.SocketId}: Ended processing loop in state {socket.State}");
 
                 // don't leave the socket in any potentially connected state
@@ -112,13 +157,14 @@ namespace CirclesLand.BlockchainIndexer.Api
                 }
 
                 // by this point the socket is closed or aborted, the ConnectedClient object is useless
-                if (WebsocketServer.Clients.TryRemove(client.SocketId, out _))
+                if (WebsocketService.Clients.TryRemove(client.SocketId, out _))
                 {
                     socket.Dispose();
                 }
 
                 // signal to the middleware pipeline that this task has completed
                 client.TaskCompletion.SetResult(true);
+                await _implementation.StopAsync(cancellationToken);
             }
         }
 

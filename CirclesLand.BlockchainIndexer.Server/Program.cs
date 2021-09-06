@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -13,13 +12,19 @@ using Microsoft.Extensions.Hosting;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Npgsql;
+using DotNetHost = Microsoft.Extensions.Hosting.Host;
 
 namespace CirclesLand.BlockchainIndexer.Server
 {
     public class Program
     {
+        public static string ConnectionString { get; private set; }
+        public static string RpcGatewayUrl { get; private set; }
+        public static string HostId { get; private set; }
+
         public static async Task Main(string[] args)
         {
+            HostId = Guid.NewGuid().ToString("N");
             var validationErrors = new List<string>();
             var connectionString = Environment.GetEnvironmentVariable("INDEXER_CONNECTION_STRING");
             try
@@ -31,6 +36,8 @@ namespace CirclesLand.BlockchainIndexer.Server
                     validationErrors.Add("The connection string contains no 'User ID'");
                 if (string.IsNullOrWhiteSpace(csb.Database))
                     validationErrors.Add("The connection string contains no 'Database'");
+
+                ConnectionString = connectionString;
             }
             catch (Exception ex)
             {
@@ -42,6 +49,10 @@ namespace CirclesLand.BlockchainIndexer.Server
                 out var rpcGatewayUri))
             {
                 validationErrors.Add("Couldn't parse the 'INDEXER_RPC_GATEWAY_URL' environment variable. Expected 'System.Uri'.");
+            }
+            else
+            {
+                RpcGatewayUrl = rpcGatewayUri.ToString();
             }
             if (!Uri.TryCreate(Environment.GetEnvironmentVariable("INDEXER_WEBSOCKET_URL"), UriKind.Absolute,
                 out var websocketUrl))
@@ -96,7 +107,7 @@ namespace CirclesLand.BlockchainIndexer.Server
                         
                         var msg = JsonConvert.SerializeObject(changes);
                         Logger.Log(msg);
-                        WebsocketServer.BroadcastMessage(msg);
+                        WebsocketService.BroadcastMessage(msg);
                     }
                     catch (Exception e)
                     {
@@ -107,9 +118,9 @@ namespace CirclesLand.BlockchainIndexer.Server
             };
             
             // TODO: Use cancellation token
-            indexer.Run();
+            // indexer.Run();
 
-            Host.CreateDefaultBuilder(args)
+            DotNetHost.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseUrls(@$"{websocketUrl}");

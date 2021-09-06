@@ -501,15 +501,6 @@ select id transaction_id
      , obj
 from safe_timeline st;
 
-create or replace procedure publish_event(topic text, message text)
-as
-$yolo$
-begin
-    perform pg_notify(topic, message::text);
-end
-$yolo$
-language plpgsql;
-
 /*
 create table transaction_log (
     id bigserial primary key,

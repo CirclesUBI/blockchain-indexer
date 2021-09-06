@@ -5,25 +5,31 @@ using System.Threading.Tasks;
 using CirclesLand.BlockchainIndexer.Util;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace CirclesLand.BlockchainIndexer.Api
 {
-    public class WebsocketServer : IMiddleware
+    public class WebsocketService : IMiddleware
     {
-        public static readonly ConcurrentDictionary<int, ConnectedClient> Clients = new();
+        public static readonly ConcurrentDictionary<int, ConnectedWebsocketClient> Clients = new();
 
         private static int _socketCounter = 0;
         private static bool _serverIsRunning = true;
 
         private static CancellationTokenRegistration _appShutdownHandler;
+        private readonly IHostApplicationLifetime _hostLifetime;
+        private readonly ILogger<WebsocketService> _logger;
 
-        public WebsocketServer(IHostApplicationLifetime hostLifetime)
+        public WebsocketService(IHostApplicationLifetime hostLifetime, ILogger<WebsocketService> logger)
         {
             // gracefully close all websockets during shutdown (only register on first instantiation)
             if (_appShutdownHandler.Token.Equals(CancellationToken.None))
             {
                 _appShutdownHandler = hostLifetime.ApplicationStopping.Register(ApplicationShutdownHandler);
             }
+
+            _hostLifetime = hostLifetime;
+            _logger = logger;
         }
 
         public static async Task BroadcastMessage(string messageString)
@@ -57,7 +63,13 @@ namespace CirclesLand.BlockchainIndexer.Api
                     var socketId = Interlocked.Increment(ref _socketCounter);
                     var socket = await context.WebSockets.AcceptWebSocketAsync();
                     var completion = new TaskCompletionSource<object>();
-                    var client = new ConnectedClient(socketId, socket, _appShutdownHandler.Token, completion);
+                    var client = new ConnectedWebsocketClient(
+                        socketId,
+                        _hostLifetime,
+                        _logger,
+                        socket, 
+                        _appShutdownHandler.Token, 
+                        completion);
 
                     if (!Clients.TryAdd(socketId, client))
                     {
@@ -92,7 +104,7 @@ namespace CirclesLand.BlockchainIndexer.Api
         }
 
         // event-handlers are the sole case where async void is valid
-        private static async void ApplicationShutdownHandler()
+        private async void ApplicationShutdownHandler()
         {
             _serverIsRunning = false;
         }

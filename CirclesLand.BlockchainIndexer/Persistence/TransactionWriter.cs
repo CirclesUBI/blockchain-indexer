@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
+using CirclesLand.BlockchainIndexer.Util;
 using Dapper;
 using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
 using Nethereum.RPC.Eth.DTOs;
@@ -85,6 +86,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
 
             if (existingTransactionId != 0)
             {
+                Logger.Log($"Transaction '{transaction.TransactionHash}' (Id: {existingTransactionId}) was already written by another process.");
                 return existingTransactionId;
             }
 

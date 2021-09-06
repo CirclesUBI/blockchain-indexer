@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Npgsql;
 
-namespace CirclesLand.BlockchainIndexer
+namespace CirclesLand.Host
 {
     public class DatabaseEventListener
     {
@@ -14,6 +14,7 @@ namespace CirclesLand.BlockchainIndexer
         private bool _stopping;
 
         public event EventHandler Stopped;
+        public event UnhandledExceptionEventHandler Error;
         public event NotificationEventHandler Data;
 
         private CancellationTokenSource _cancellationTokenSource;
@@ -58,26 +59,45 @@ namespace CirclesLand.BlockchainIndexer
 
         private void Listen(object cancellationToken)
         {
-            var ct = (CancellationToken)cancellationToken;
-            ct.ThrowIfCancellationRequested();
-            
-            using var conn = new NpgsqlConnection(_connectionString);
-            conn.Open();
-            
-            conn.Notification += (o, e) => Data?.Invoke(this, e);
-            
-            // TODO: prevent sql injection and use a parameterized function to subscribe
-            using (var cmd = new NpgsqlCommand($"LISTEN {_topic};", conn))
+            try
             {
-                cmd.ExecuteNonQuery();
-            }
+                var ct = (CancellationToken) cancellationToken;
 
-            while (!_stopping)
-            {
-                conn.Wait();
+                using var conn = new NpgsqlConnection(_connectionString);
+                conn.Open();
+
+                conn.Notification += (o, e) =>
+                {
+                    try
+                    {
+                        Data?.Invoke(this, e);
+                    }
+                    catch (Exception ex)
+                    {
+                        Util.PrintException(ex);
+                        Error?.Invoke(this, new UnhandledExceptionEventArgs(ex, false));
+                    }
+                };
+
+                // TODO: prevent sql injection and use a parameterized function to subscribe
+                using (var cmd = new NpgsqlCommand($"LISTEN {_topic};", conn))
+                {
+                    cmd.ExecuteNonQuery();
+                }
+
+                while (!_stopping)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    conn.Wait(TimeSpan.FromSeconds(1));
+                }
+
+                Stopped?.Invoke(this, EventArgs.Empty);
             }
-            
-            Stopped?.Invoke(this, EventArgs.Empty);
+            catch (Exception ex)
+            {
+                Util.PrintException(ex);
+                Error?.Invoke(this, new UnhandledExceptionEventArgs(ex, false));
+            }
         }
     }
 }

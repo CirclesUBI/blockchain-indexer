@@ -7,6 +7,7 @@ using Akka;
 using Akka.Actor;
 using Akka.Streams;
 using Akka.Streams.Dsl;
+using Akka.Streams.Implementation.Fusing;
 using CirclesLand.BlockchainIndexer.DetailExtractors;
 using CirclesLand.BlockchainIndexer.Persistence;
 using CirclesLand.BlockchainIndexer.Sources;
@@ -37,7 +38,7 @@ namespace CirclesLand.BlockchainIndexer
         Polling,
         Live
     }
-    
+
     public class Indexer
     {
         private readonly string _rpcEndpointUrl;
@@ -53,13 +54,14 @@ namespace CirclesLand.BlockchainIndexer
             _rpcEndpointUrl = rpcEndpointUrl;
         }
 
-        private long? _lastBlock;
+        private long? _firstNewBlock;
 
         public IndexerMode Mode { get; private set; } = IndexerMode.NotRunning;
 
         public async Task Run(int maxBlockDownloads = 24, int maxReceiptDownloads = 96)
         {
             HexBigInteger currentlyWritingBlock = new(0);
+            var clientId = Guid.NewGuid().ToString("N");
 
             var startedAt = DateTime.Now;
             var system = ActorSystem.Create("system");
@@ -103,13 +105,9 @@ namespace CirclesLand.BlockchainIndexer
                     }
 
                     await using var writerConnection = new NpgsqlConnection(_connectionString);
-
                     Logger.Log($"Opening the writer db connection ..");
                     writerConnection.Open();
-
-                    Logger.Log("Checking for incomplete blocks ..");
-                    CheckForIncompleteBlocks(writerConnection);
-
+                    
                     Source<HexBigInteger, NotUsed> source;
                     var web3 = new Web3(_rpcEndpointUrl);
 
@@ -119,13 +117,21 @@ namespace CirclesLand.BlockchainIndexer
 
                     Logger.Log($"The current block is {currentBlock}.");
 
-                    var delta = currentBlock.Value - _lastBlock;
-                    Logger.Log($"The last known block is {delta} blocks away from the latest block.");
+                    var lastKnownBlock = writerConnection.QuerySingleOrDefault<long?>(
+                        "select max(number) from block where total_Transaction_count = indexed_transaction_count;") 
+                                 ?? 12529458;
+
+                    _firstNewBlock = lastKnownBlock + 1;
+                    
+                    Logger.Log($"First new known block is: {_firstNewBlock}");
+                    
+                    var delta = currentBlock.Value - _firstNewBlock;
+                    Logger.Log($"The last known block is {delta} blocks away from the first new block.");
 
                     if (delta > 10)
                     {
                         Logger.Log($"delta > 10: Using the bulk source.");
-                        source = BulkSource.Create(_lastBlock.Value, currentBlock.Value);
+                        source = BulkSource.Create(_firstNewBlock.Value, currentBlock.Value);
                         Mode = IndexerMode.CatchUp;
                     }
                     else
@@ -137,10 +143,10 @@ namespace CirclesLand.BlockchainIndexer
 
                     await source
                         // Get the full block with all transactions
-                        .SelectAsync(maxBlockDownloads, currentBlockNo => 
+                        .SelectAsync(maxBlockDownloads, currentBlockNo =>
                             web3.Eth.Blocks
-                            .GetBlockWithTransactionsByNumber
-                            .SendRequestAsync(currentBlockNo))
+                                .GetBlockWithTransactionsByNumber
+                                .SendRequestAsync(currentBlockNo))
 
                         // Bundle the every transaction in a block with the block timestamp and send it downstream
                         .SelectMany(block =>
@@ -260,6 +266,7 @@ namespace CirclesLand.BlockchainIndexer
                                 {
                                     NewBlock?.Invoke(this, new IndexedBlockEventArgs(currentlyWritingBlock));
                                 }
+
                                 currentlyWritingBlock = transactionWithExtractedDetails.Transaction.BlockNumber;
                                 Interlocked.Increment(ref totalProcessedBlocks);
                             }
@@ -312,7 +319,7 @@ namespace CirclesLand.BlockchainIndexer
             }
         }
 
-        private void CheckForIncompleteBlocks(NpgsqlConnection connection)
+        private void RemoveIncompleteBlocks(NpgsqlConnection connection)
         {
             var incompleteBlock =
                 connection.QuerySingleOrDefault<long?>("select block_no from first_incomplete_block;");
@@ -326,11 +333,10 @@ namespace CirclesLand.BlockchainIndexer
 
                 Logger.Log($"Done.");
             }
-
-            _lastBlock =
-                connection.QuerySingleOrDefault<long?>("select max(number) from block") ?? 12529458;
-
-            Logger.Log($"Last known block is: {_lastBlock}");
+            else
+            {
+                Logger.Log("No incomplete blocks found.");
+            }
         }
     }
 }
