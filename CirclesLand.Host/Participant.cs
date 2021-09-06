@@ -275,9 +275,8 @@ namespace CirclesLand.Host
                         Console.WriteLine(
                             $"Warning: Service '{serviceId}' timed out at {oldTimeout} before it just re-appeared at {now} with new timeout at {timeoutAt}.");
                     }
-
-                    KnownInstances.TryAdd(serviceId, timeoutAt.Value);
                 }
+                KnownInstances.TryAdd(serviceId, timeoutAt.Value);
             }
             else if (type == "disconnected")
             {
