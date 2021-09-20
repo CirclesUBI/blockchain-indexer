@@ -1,3 +1,4 @@
+using System;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
 using Dapper;
 using Npgsql;
@@ -6,28 +7,37 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
 {
     public static class Erc20TransferWriter
     {
-        public static long Insert (
+        public static void Insert (
             NpgsqlConnection connection, 
             NpgsqlTransaction? dbTransaction, 
-            long transactionId, 
+            string hash,
+            int index,
+            DateTime timestamp,
+            long block_number,
             Erc20Transfer data)
         {
             const string InserErc20TransferSql = @"
-                insert into erc20_transfer (
-                      transaction_id
+                insert into erc20_transfer_2 (
+                      hash
+                    , index                    
+                    , timestamp                
+                    , block_number
                     , ""from""
                     , ""to""
                     , token
                     , value
                 ) values (
-                    @transaction_id, @from, @to, @token, @value::numeric
+                    @hash, @index, @timestamp, @block_number, @from, @to, @token, @value::numeric
                 )
-                returning id;
+                on conflict do nothing;
             ";
             
-            return connection.QuerySingle<long>(InserErc20TransferSql, new
+            connection.Execute(InserErc20TransferSql, new
             {
-                transaction_id = transactionId,
+                hash,
+                index,
+                timestamp,
+                block_number,
                 from = data.From?.ToLowerInvariant(),
                 to = data.To?.ToLowerInvariant(),
                 token = data.Token?.ToLowerInvariant(),

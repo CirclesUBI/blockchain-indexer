@@ -1,7 +1,5 @@
 using System;
-using System.Collections.Generic;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
-using CirclesLand.BlockchainIndexer.Util;
 using Dapper;
 using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
 using Nethereum.RPC.Eth.DTOs;
@@ -32,75 +30,45 @@ namespace CirclesLand.BlockchainIndexer.Persistence
             )
             returning Id;
         ";
-        
+
         private readonly NpgsqlConnection _connection;
         private readonly NpgsqlTransaction? _dbTransaction;
-        
+
         public TransactionWriter(NpgsqlConnection connection, NpgsqlTransaction? dbTransaction)
         {
             _connection = connection;
             _dbTransaction = dbTransaction;
         }
-        
-        public long? Write(bool blockOnly, int totalTransactionCount, DateTime blockTimestamp, TransactionClass transactionClass, Transaction transaction, IEnumerable<IDetail> details)
+
+        public void Write(
+            int totalTransactionCount, 
+            DateTime blockTimestamp, 
+            TransactionClass transactionClass, 
+            Transaction transaction)
         {
-            var existingBlock = _connection.QuerySingleOrDefault<long>(
-                "select number from block where number = @number;",
-                new
+            _connection.Execute(
+                @"insert into block (number, hash, timestamp, total_transaction_count, indexed_transaction_count) 
+                         values (@number, @hash, @timestamp, @total_transaction_count, @indexed_transaction_count)
+                         on conflict do nothing;", new
                 {
-                    number = transaction.BlockNumber.ToLong()
+                    number = transaction.BlockNumber.ToLong(),
+                    hash = transaction.BlockHash,
+                    timestamp = blockTimestamp,
+                    total_transaction_count = totalTransactionCount,
+                    indexed_transaction_count = 0
                 }, _dbTransaction);
-
-            if (existingBlock == 0)
-            {
-                _connection.Execute(
-                    @"insert into block (number, hash, timestamp, total_transaction_count, indexed_transaction_count) 
-                         values (@number, @hash, @timestamp, @total_transaction_count, @indexed_transaction_count);", new
-                    {
-                        number = transaction.BlockNumber.ToLong(),
-                        hash = transaction.BlockHash,
-                        timestamp = blockTimestamp,
-                        total_transaction_count = totalTransactionCount,
-                        indexed_transaction_count = 0
-                    }, _dbTransaction);
-            }
-
-            if (blockOnly)
-            {
-                _connection.Execute(
-                    @"update block set 
-                        indexed_transaction_count = indexed_transaction_count + 1 
-                     where number = @number;", new
-                    {
-                        number = transaction.BlockNumber.ToLong()
-                    }, _dbTransaction);
-                
-                return null;
-            } 
-            
-            var existingTransactionId = _connection.QuerySingleOrDefault<long>(
-                "select \"id\" from \"transaction\" where \"hash\" = @transaction_hash;",new
-                {
-                    transaction_hash = transaction.TransactionHash
-                }, _dbTransaction);
-
-            if (existingTransactionId != 0)
-            {
-                Logger.Log($"Transaction '{transaction.TransactionHash}' (Id: {existingTransactionId}) was already written by another process.");
-                return existingTransactionId;
-            }
 
             var classificationArray = transactionClass.ToString()
                 .Split(",", StringSplitOptions.TrimEntries);
-            
+
             const string InsertTransactionSql = @"
-                insert into transaction (
+                insert into transaction_2 (
                       block_number
                     , ""from""
                     , ""to""
-                    , index
-                    , gas
                     , hash
+                    , index
+                    , timestamp
                     , value
                     , nonce
                     , type
@@ -110,42 +78,31 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                     @block_number, 
                     @from, 
                     @to, 
-                    @index, 
-                    @gas::numeric, 
                     @hash,
+                    @index, 
+                    @timestamp,
                     @value::numeric, 
                     @nonce, 
                     @type, 
                     @input, 
                     @classification
                 )
-                returning Id;
-            ";
+                on conflict do nothing;";
 
-            var transactionId = _connection.QuerySingle<long>(InsertTransactionSql, new
+            _connection.Execute(InsertTransactionSql, new
             {
                 block_number = transaction.BlockNumber.ToLong(),
                 from = transaction.From?.ToLowerInvariant(),
                 to = transaction.To?.ToLowerInvariant(),
-                index = (int)transaction.TransactionIndex.ToLong(),
-                gas = transaction.Gas.ToString(),
+                index = (int) transaction.TransactionIndex.ToLong(),
                 hash = transaction.TransactionHash,
+                timestamp = blockTimestamp,
                 value = transaction.Value.ToString(),
                 nonce = transaction.Nonce.ToString(),
                 type = transaction.Type.ToString(),
                 input = transaction.Input,
                 classification = classificationArray
             });
-            
-            _connection.Execute(
-                @"update block set 
-                        indexed_transaction_count = indexed_transaction_count + 1 
-                     where number = @number;", new
-                {
-                    number = transaction.BlockNumber.ToLong()
-                }, _dbTransaction);
-            
-            return transactionId;
         }
     }
 }

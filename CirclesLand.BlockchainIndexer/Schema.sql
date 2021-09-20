@@ -420,7 +420,6 @@ select cs.block_number
      ,cs.input
      ,cs.nonce
      ,cs.type
-     ,cs.gas_price
      ,cs.classification
 into transaction_2
 from transaction cs
@@ -433,7 +432,7 @@ create index ix_transaction_2_timestamp on transaction_2(timestamp) include (has
 create index ix_transaction_2_from on transaction_2("from") include ("to", value);
 create index ix_transaction_2_to on transaction_2("to") include ("from", value);
 
-select cs.id, t.hash, t.index, t_2.timestamp, t.block_number, "user", token
+select t.hash, t.index, t_2.timestamp, t.block_number, "user", token
 into crc_signup_2
 from crc_signup cs
     join transaction t on cs.transaction_id = t.id
@@ -441,14 +440,14 @@ from crc_signup cs
 
 alter table crc_signup_2 add constraint fk_signup_transaction_2 foreign key(hash) references transaction_2(hash);
 alter table crc_signup_2 add constraint fk_signup_block_2 foreign key(block_number) references block(number);
+create unique index ux_crc_signup_2_user on crc_signup_2("user") include (token);
+create unique index ux_crc_signup_2_token on crc_signup_2(token) include ("user");
 create index ix_crc_signup_2_timestamp on crc_signup_2(timestamp) include (hash, block_number, index, timestamp);
 create index ix_crc_signup_2_hash on crc_signup_2(hash) include (block_number, index, timestamp);
 create index ix_crc_signup_2_block_number on crc_signup_2(block_number) include (index, timestamp);
-create unique index ux_crc_signup_2_user on crc_signup_2("user") include (token);
-create unique index ux_crc_signup_2_token on crc_signup_2(token) include ("user");
 
 
-select cs.id, t.hash, t.index, t_2.timestamp, t.block_number, cs.organisation
+select t.hash, t.index, t_2.timestamp, t.block_number, cs.organisation
 into crc_organisation_signup_2
 from crc_organisation_signup cs
          join transaction t on cs.transaction_id = t.id
@@ -456,13 +455,13 @@ from crc_organisation_signup cs
 
 alter table crc_organisation_signup_2 add constraint fk_organisation_signup_transaction_2 foreign key(hash) references transaction_2(hash);
 alter table crc_organisation_signup_2 add constraint fk_organisation_signup_block_2 foreign key(block_number) references block(number);
+create unique index ux_crc_organisation_signup_2_organisation on crc_organisation_signup_2(organisation);
 create index ix_crc_organisation_signup_2_timestamp on crc_organisation_signup_2(timestamp) include (hash, block_number, index, timestamp);
 create index ix_crc_organisation_signup_2_hash on crc_organisation_signup_2(hash) include (block_number, index, timestamp);
 create index ix_crc_organisation_signup_2_block_number on crc_organisation_signup_2(block_number) include (index, timestamp);
-create unique index ux_crc_organisation_signup_2_organisation on crc_organisation_signup_2(organisation);
 
 
-select cs.id, t.hash, t.index, t_2.timestamp, t.block_number, cs.address, cs.can_send_to, cs."limit"
+select t.hash, t.index, t_2.timestamp, t.block_number, cs.address, cs.can_send_to, cs."limit"
 into crc_trust_2
 from crc_trust cs
          join transaction t on cs.transaction_id = t.id
@@ -470,13 +469,14 @@ from crc_trust cs
 
 alter table crc_trust_2 add constraint fk_trust_transaction_2 foreign key(hash) references transaction_2(hash);
 alter table crc_trust_2 add constraint fk_trust_block_2 foreign key(block_number) references block(number);
+create unique index ux_crc_trust_2_hash_address_can_send_to_limit on crc_trust_2(hash, address, can_send_to, "limit");
 create index ix_crc_trust_2_timestamp on crc_trust_2(timestamp) include (hash, block_number, index, timestamp);
 create index ix_crc_trust_2_hash on crc_trust_2(hash) include (block_number, index, timestamp);
 create index ix_crc_trust_2_block_number on crc_trust_2(block_number) include (index, timestamp);
 create index ix_crc_trust_2_address on crc_trust_2(address) include (can_send_to, "limit");
 create index ix_crc_trust_2_can_send_to on crc_trust_2(can_send_to) include (address, "limit");
 
-select cs.id, t.hash, t.index, t_2.timestamp, t.block_number, cs.from, cs.to, cs.value
+select t.hash, t.index, t_2.timestamp, t.block_number, cs.from, cs.to, cs.value
 into crc_hub_transfer_2
 from crc_hub_transfer cs
      join transaction t on cs.transaction_id = t.id
@@ -484,13 +484,14 @@ from crc_hub_transfer cs
 
 alter table crc_hub_transfer_2 add constraint fk_hub_transfer_transaction_2 foreign key(hash) references transaction_2(hash);
 alter table crc_hub_transfer_2 add constraint fk_hub_transfer_block_2 foreign key(block_number) references block(number);
+create unique index ux_crc_hub_transfer_2_hash_from_to_value on crc_hub_transfer_2(hash, "from", "to", "value");
 create index ix_crc_hub_transfer_2_timestamp on crc_hub_transfer_2(timestamp) include (hash, block_number, index, timestamp);
 create index ix_crc_hub_transfer_2_hash on crc_hub_transfer_2(hash) include (block_number, index, timestamp);
 create index ix_crc_hub_transfer_2_block_number on crc_hub_transfer_2(block_number) include (index, timestamp);
 create index ix_crc_hub_transfer_2_from on crc_hub_transfer_2("from") include ("to", value);
 create index ix_crc_hub_transfer_2_to on crc_hub_transfer_2("to") include ("from", value);
 
-select cs.id, t.hash, t.index, t_2.timestamp, t.block_number, cs.from, cs.to, cs.token, cs.value
+select t.hash, t.index, t_2.timestamp, t.block_number, cs.from, cs.to, cs.token, cs.value
 into erc20_transfer_2
 from erc20_transfer cs
      join transaction t on cs.transaction_id = t.id
@@ -498,6 +499,7 @@ from erc20_transfer cs
 
 alter table erc20_transfer_2 add constraint fk_erc20_transfer_transaction_2 foreign key(hash) references transaction_2(hash);
 alter table erc20_transfer_2 add constraint fk_erc20_transfer_block_2 foreign key(block_number) references block(number);
+create unique index ux_erc20_transfer_2_hash_from_to_value on erc20_transfer_2(hash, "from", "to", "value");
 create index ix_erc20_transfer_2_timestamp on erc20_transfer_2(timestamp) include (hash, block_number, index, timestamp);
 create index ix_erc20_transfer_2_hash on erc20_transfer_2(hash) include (block_number, index, timestamp);
 create index ix_erc20_transfer_2_block_number on erc20_transfer_2(block_number) include (index, timestamp);
@@ -506,7 +508,7 @@ create index ix_erc20_transfer_2_from on erc20_transfer_2("from") include ("to",
 create index ix_erc20_transfer_2_to on erc20_transfer_2("to") include ("from", token, value);
 
 
-select cs.id, t.hash, t.index, t_2.timestamp, t.block_number, cs.from, cs.to, cs.value
+select t.hash, t.index, t_2.timestamp, t.block_number, cs.from, cs.to, cs.value
 into eth_transfer_2
 from eth_transfer cs
      join transaction t on cs.transaction_id = t.id
@@ -514,6 +516,7 @@ from eth_transfer cs
 
 alter table eth_transfer_2 add constraint fk_eth_transfer_transaction_2 foreign key(hash) references transaction_2(hash);
 alter table eth_transfer_2 add constraint fk_eth_transfer_block_2 foreign key(block_number) references block(number);
+create unique index ux_eth_transfer_2_hash_from_to_value on erc20_transfer_2(hash, "from", "to", "value");
 create index ix_eth_transfer_2_timestamp on eth_transfer_2(timestamp) include (hash, block_number, index, timestamp);
 create index ix_eth_transfer_2_hash on eth_transfer_2(hash) include (block_number, index, timestamp);
 create index ix_eth_transfer_2_block_number on eth_transfer_2(block_number) include (index, timestamp);
@@ -521,7 +524,7 @@ create index ix_eth_transfer_2_from on eth_transfer_2("from") include ("to", val
 create index ix_eth_transfer_2_to on eth_transfer_2("to") include ("from", value);
 
 
-select cs.id, t.hash, t.index, t_2.timestamp, t.block_number, cs.initiator, cs.from, cs.to, cs.value
+select t.hash, t.index, t_2.timestamp, t.block_number, cs.initiator, cs.from, cs.to, cs.value
 into gnosis_safe_eth_transfer_2
 from gnosis_safe_eth_transfer cs
      join transaction t on cs.transaction_id = t.id
@@ -529,12 +532,14 @@ from gnosis_safe_eth_transfer cs
 
 alter table gnosis_safe_eth_transfer_2 add constraint fk_gnosis_safe_eth_transfer_transaction_2 foreign key(hash) references transaction_2(hash);
 alter table gnosis_safe_eth_transfer_2 add constraint fk_gnosis_safe_eth_transfer_block_2 foreign key(block_number) references block(number);
+create unique index ux_gnosis_safe_eth_transfer_2_hash_from_to_value on gnosis_safe_eth_transfer_2(hash, initiator, "from", "to", "value");
 create index ix_gnosis_safe_eth_transfer_2_timestamp on gnosis_safe_eth_transfer_2(timestamp) include (hash, block_number, index, timestamp);
 create index ix_gnosis_safe_eth_transfer_2_hash on gnosis_safe_eth_transfer_2(hash) include (block_number, index, timestamp);
 create index ix_gnosis_safe_eth_transfer_2_block_number on gnosis_safe_eth_transfer_2(block_number) include (index, timestamp);
 create index ix_gnosis_safe_eth_transfer_2_from on gnosis_safe_eth_transfer_2("from") include ("to", value);
 create index ix_gnosis_safe_eth_transfer_2_to on gnosis_safe_eth_transfer_2("to") include ("from", value);
 create index ix_gnosis_safe_eth_transfer_2_initiator on gnosis_safe_eth_transfer_2(initiator);
+
 
 create view crc_ledger_2 (timestamp, transaction_id, verb, value, token, token_owner, predicate, safe_address)
 as

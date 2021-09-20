@@ -1,3 +1,4 @@
+using System;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
 using Dapper;
 using Npgsql;
@@ -6,28 +7,37 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
 {
     public static class GnosisSafeEthTransferWriter
     {
-        public static long Insert (
+        public static void Insert (
             NpgsqlConnection connection, 
             NpgsqlTransaction? dbTransaction, 
-            long transactionId, 
+            string hash,
+            int index,
+            DateTime timestamp,
+            long block_number,
             GnosisSafeEthTransfer data)
         {
             const string InsertGnosisSafeEthTransferSql = @"
-                insert into gnosis_safe_eth_transfer (
-                    transaction_id
+                insert into gnosis_safe_eth_transfer_2 (
+                      hash
+                    , index                    
+                    , timestamp                
+                    , block_number
                     , initiator
                     , ""from""
                     , ""to""
                     , value
                 ) values (
-                    @transaction_id, @initiator, @from, @to, @value::numeric
+                    @hash, @index, @timestamp, @block_number, @initiator, @from, @to, @value::numeric
                 )
-                returning id;
+                on conflict do nothing;
             ";
             
-            return connection.QuerySingle<long>(InsertGnosisSafeEthTransferSql, new
+            connection.Execute(InsertGnosisSafeEthTransferSql, new
             {
-                transaction_id = transactionId,
+                hash,
+                index,
+                timestamp,
+                block_number,
                 initiator = data.Initiator?.ToLowerInvariant(),
                 from = data.From?.ToLowerInvariant(),
                 to = data.To?.ToLowerInvariant(),

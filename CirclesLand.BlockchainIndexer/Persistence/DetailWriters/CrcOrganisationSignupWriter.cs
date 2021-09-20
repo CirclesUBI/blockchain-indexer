@@ -1,3 +1,4 @@
+using System;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
 using Dapper;
 using Npgsql;
@@ -6,25 +7,34 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
 {
     public static class CrcOrganisationSignupWriter
     {
-        public static long Insert(
+        public static void Insert(
             NpgsqlConnection connection, 
             NpgsqlTransaction? dbTransaction, 
-            long transactionId, 
+            string hash,
+            int index,
+            DateTime timestamp,
+            long block_number,
             CrcOrganisationSignup data)
         {
             const string InsertCrcOrganisationSql = @"
-                insert into crc_organisation_signup (
-                      transaction_id
+                insert into crc_organisation_signup_2 (
+                      hash
+                    , index                    
+                    , timestamp                
+                    , block_number
                     , organisation
                 ) values (
-                    @transaction_id, @organisation
+                    @hash, @index, @timestamp, @block_number, @organisation
                 )
-                returning id;
+                on conflict do nothing;
             ";
             
-            return connection.QuerySingle<long>(InsertCrcOrganisationSql, new
+            connection.Execute(InsertCrcOrganisationSql, new
             {
-                transaction_id = transactionId,
+                hash,
+                index,
+                timestamp,
+                block_number,
                 organisation = data.Organization?.ToLowerInvariant()
             }, dbTransaction);
         }

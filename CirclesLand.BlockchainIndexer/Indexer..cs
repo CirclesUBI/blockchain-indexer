@@ -58,7 +58,7 @@ namespace CirclesLand.BlockchainIndexer
 
         public IndexerMode Mode { get; private set; } = IndexerMode.NotRunning;
 
-        public async Task Run(int maxBlockDownloads = 24, int maxReceiptDownloads = 96)
+        public async Task Run(Action<long> onBlockWritten, int maxBlockDownloads = 24, int maxReceiptDownloads = 96)
         {
             HexBigInteger currentlyWritingBlock = new(0);
             var clientId = Guid.NewGuid().ToString("N");
@@ -86,9 +86,7 @@ namespace CirclesLand.BlockchainIndexer
                 currentErrorRestarts = 0;
                 errorRestartPenaltyInMs = 0;
             }
-
-            // await LiveSource.NewBlockHeader_With_Subscription(_rpcEndpointUrl);
-
+            
             while (true)
             {
                 Interlocked.Increment(ref totalRounds);
@@ -107,7 +105,7 @@ namespace CirclesLand.BlockchainIndexer
                     await using var writerConnection = new NpgsqlConnection(_connectionString);
                     Logger.Log($"Opening the writer db connection ..");
                     writerConnection.Open();
-                    
+
                     Source<HexBigInteger, NotUsed> source;
                     var web3 = new Web3(_rpcEndpointUrl);
 
@@ -118,13 +116,31 @@ namespace CirclesLand.BlockchainIndexer
                     Logger.Log($"The current block is {currentBlock}.");
 
                     var lastKnownBlock = writerConnection.QuerySingleOrDefault<long?>(
-                        "select max(number) from block where total_Transaction_count = indexed_transaction_count;") 
-                                 ?? 12529458;
+                        @"with a as (
+                                select block_number
+                                from transaction_2 t
+                                         join block b on t.block_number = b.number
+                                where block_number >= 17856924
+                                group by block_number, b.total_transaction_count
+                                having count(t.hash) != b.total_transaction_count
+                                order by block_number
+                            ), b as (
+                                select min(block_number) as block_number
+                                from a
+                            ), c as (
+                                select max(number) as block_number
+                                from block
+                                union all
+                                select block_number
+                                from b
+                                where b.block_number is not null
+                            )
+                            select min(block_number) from c;") ?? 12529458;
 
-                    _firstNewBlock = lastKnownBlock + 1;
-                    
+                    _firstNewBlock = lastKnownBlock;
+
                     Logger.Log($"First new known block is: {_firstNewBlock}");
-                    
+
                     var delta = currentBlock.Value - _firstNewBlock;
                     Logger.Log($"The last known block is {delta} blocks away from the first new block.");
 
@@ -196,21 +212,6 @@ namespace CirclesLand.BlockchainIndexer
                             );
                         })
 
-                        // Set a flag which indicates whether to store the transaction or not
-                        .Select(transactionAndReceipt =>
-                        {
-                            var isUnknown = transactionAndReceipt.Classification == TransactionClass.Unknown;
-
-                            return (
-                                TotalTransactionsInBlock: transactionAndReceipt.TotalTransactionsInBlock,
-                                Timestamp: transactionAndReceipt.Timestamp,
-                                Transaction: transactionAndReceipt.Transaction,
-                                Receipt: transactionAndReceipt.Receipt,
-                                Classification: transactionAndReceipt.Classification,
-                                ShouldBeIndexed: !isUnknown
-                            );
-                        })
-
                         // Add the details for each transaction
                         .Select(classifiedTransactions =>
                         {
@@ -227,7 +228,6 @@ namespace CirclesLand.BlockchainIndexer
                                 Transaction: classifiedTransactions.Transaction,
                                 Receipt: classifiedTransactions.Receipt,
                                 Classification: classifiedTransactions.Classification,
-                                SholdBeIndexed: classifiedTransactions.ShouldBeIndexed,
                                 Details: extractedDetails
                             );
                         })
@@ -237,30 +237,42 @@ namespace CirclesLand.BlockchainIndexer
                             // be updated again once its written.
                             using var transaction = writerConnection.BeginTransaction(IsolationLevel.ReadCommitted);
 
-                            var blockTimestamp =
-                                transactionWithExtractedDetails.Timestamp.ToLong();
-                            var blockTimestampDateTime = DateTimeOffset.FromUnixTimeSeconds(
-                                blockTimestamp).UtcDateTime;
+                            var blockTimestamp = transactionWithExtractedDetails.Timestamp.ToLong();
+                            var blockTimestampDateTime = DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
 
-                            var transactionId = new TransactionWriter(writerConnection, transaction).Write(
-                                !transactionWithExtractedDetails.SholdBeIndexed,
-                                transactionWithExtractedDetails.TotalTransactionsInBlock,
-                                blockTimestampDateTime,
-                                transactionWithExtractedDetails.Classification,
-                                transactionWithExtractedDetails.Transaction,
+                            new TransactionWriter(writerConnection, transaction)
+                                .Write(
+                                    transactionWithExtractedDetails.TotalTransactionsInBlock,
+                                    blockTimestampDateTime,
+                                    transactionWithExtractedDetails.Classification,
+                                    transactionWithExtractedDetails.Transaction);
+
+                            new TransactionDetailWriter(writerConnection, transaction).Write(
+                                transactionWithExtractedDetails.Transaction.TransactionHash, 
+                                (int)transactionWithExtractedDetails.Transaction.TransactionIndex.Value, 
+                                blockTimestampDateTime, 
+                                (long)transactionWithExtractedDetails.Transaction.BlockNumber.Value,
                                 transactionWithExtractedDetails.Details);
-
-                            if (transactionId != null)
-                            {
-                                var detailIds = new TransactionDetailWriter(writerConnection, transaction).Write(
-                                    transactionId.Value,
-                                    transactionWithExtractedDetails.Details);
-                            }
 
                             transaction.Commit();
 
-                            if (transactionWithExtractedDetails.Transaction.BlockNumber.Value >
-                                currentlyWritingBlock.Value)
+                            var blockComplete = writerConnection.QuerySingleOrDefault<bool>(
+                                @"select (count(t.hash) = b.total_transaction_count) as is_complete
+                                     from transaction_2 t
+                                     join block b on t.block_number = b.number
+                                     where block_number = @block_number
+                                     group by b.total_transaction_count;", new
+                                {
+                                    block_number = transactionWithExtractedDetails.Transaction.BlockNumber.ToLong()
+                                });
+
+                            if (blockComplete)
+                            {
+                                // The last block was completely imported
+                                onBlockWritten(transactionWithExtractedDetails.Transaction.BlockNumber.ToLong());
+                            }
+
+                            if (transactionWithExtractedDetails.Transaction.BlockNumber.Value > currentlyWritingBlock.Value)
                             {
                                 if (Mode != IndexerMode.NotRunning && Mode != IndexerMode.CatchUp)
                                 {
@@ -316,26 +328,6 @@ namespace CirclesLand.BlockchainIndexer
                         errorRestartPenaltyInMs += additionalPenalty;
                     }
                 }
-            }
-        }
-
-        private void RemoveIncompleteBlocks(NpgsqlConnection connection)
-        {
-            var incompleteBlock =
-                connection.QuerySingleOrDefault<long?>("select block_no from first_incomplete_block;");
-
-            if (incompleteBlock != null)
-            {
-                Logger.Log($"Found block {incompleteBlock} as the earliest incomplete block. " +
-                           $"Deleting all blocks from this block on ..");
-
-                connection.Execute("call delete_incomplete_blocks();");
-
-                Logger.Log($"Done.");
-            }
-            else
-            {
-                Logger.Log("No incomplete blocks found.");
             }
         }
     }

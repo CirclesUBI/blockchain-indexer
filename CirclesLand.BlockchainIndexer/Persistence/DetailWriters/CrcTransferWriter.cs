@@ -1,3 +1,4 @@
+using System;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
 using Dapper;
 using Npgsql;
@@ -6,27 +7,36 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
 {
     public static class CrcTransferWriter
     {
-        public static long Insert(
+        public static void Insert(
             NpgsqlConnection connection, 
             NpgsqlTransaction? dbTransaction, 
-            long transactionId, 
+            string hash,
+            int index,
+            DateTime timestamp,
+            long block_number,
             CrcHubTransfer data)
         {
             const string InsertCrcTransferSql = @"
-                insert into crc_hub_transfer (
-                    transaction_id
+                insert into crc_hub_transfer_2 (
+                      hash
+                    , index                    
+                    , timestamp                
+                    , block_number
                     , ""from""
                     , ""to""
                     , value
                 ) values (
-                    @transaction_id, @from, @to, @value::numeric
+                    @hash, @index, @timestamp, @block_number, @from, @to, @value::numeric
                 )
-                returning Id;
+                on conflict do nothing;
             ";
             
-            return connection.QuerySingle<long>(InsertCrcTransferSql, new
+            connection.Execute(InsertCrcTransferSql, new
             {
-                transaction_id = transactionId,
+                hash,
+                index,
+                timestamp,
+                block_number,
                 from = data.From?.ToLowerInvariant(),
                 to = data.To?.ToLowerInvariant(),
                 value = data.Value

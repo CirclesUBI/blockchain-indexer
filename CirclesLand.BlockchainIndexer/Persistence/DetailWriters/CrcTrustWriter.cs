@@ -1,3 +1,4 @@
+using System;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
 using Dapper;
 using Npgsql;
@@ -6,27 +7,36 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
 {
     public static class CrcTrustWriter
     {
-        public static long Insert(
+        public static void Insert(
             NpgsqlConnection connection, 
             NpgsqlTransaction? dbTransaction, 
-            long transactionId, 
+            string hash,
+            int index,
+            DateTime timestamp,
+            long block_number,
             CrcTrust data)
         {
             const string InsertCrcTrustSql = @"
-                insert into crc_trust (
-                      transaction_id
+                insert into crc_trust_2 (
+                      hash
+                    , index                    
+                    , timestamp                
+                    , block_number
                     , address
                     , can_send_to
                     , ""limit""
                 ) values (
-                    @transaction_id, @address, @can_send_to, @limit::numeric      
+                    @hash, @index, @timestamp, @block_number, @address, @can_send_to, @limit::numeric      
                 )
-                returning id;
+                on conflict do nothing;
             ";
             
-            return connection.QuerySingle<long>(InsertCrcTrustSql, new
+            connection.Execute(InsertCrcTrustSql, new
             {
-                transaction_id = transactionId,
+                hash,
+                index,
+                timestamp,
+                block_number,
                 address = data.Address?.ToLowerInvariant(),
                 can_send_to = data.CanSendTo?.ToLowerInvariant(),
                 limit = data.Limit

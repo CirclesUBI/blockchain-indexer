@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using CirclesLand.BlockchainIndexer.Persistence.DetailWriters;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
 using Npgsql;
@@ -11,48 +10,47 @@ namespace CirclesLand.BlockchainIndexer.Persistence
     {
         private readonly NpgsqlConnection _connection;
         private readonly NpgsqlTransaction? _dbTransaction;
-        
+
         public TransactionDetailWriter(NpgsqlConnection connection, NpgsqlTransaction? dbTransaction)
         {
             _connection = connection;
             _dbTransaction = dbTransaction;
         }
-        
-        public ImmutableArray<Tuple<string, long>> Write(
-            long transactionId, 
+
+        public void Write( 
+            string hash,
+            int index,
+            DateTime timestamp,
+            long block_number,
             IEnumerable<IDetail> details)
         {
-            var detailIds = new List<Tuple<string, long>>();
-
             foreach (var detail in details)
             {
                 switch (detail)
                 {
                     case CrcTrust trust:
-                        detailIds.Add(Tuple.Create("CrcTrust", CrcTrustWriter.Insert(_connection, _dbTransaction, transactionId, trust)));
+                        CrcTrustWriter.Insert(_connection, _dbTransaction, hash, index, timestamp, block_number, trust);
                         break;
                     case CrcHubTransfer crcTransfer:
-                        detailIds.Add(Tuple.Create("CrcHubTransfer", CrcTransferWriter.Insert(_connection, _dbTransaction, transactionId, crcTransfer)));
+                        CrcTransferWriter.Insert(_connection, _dbTransaction, hash, index, timestamp, block_number, crcTransfer);
                         break;
                     case Erc20Transfer erc20Transfer:
-                        detailIds.Add(Tuple.Create("Erc20Transfer", Erc20TransferWriter.Insert(_connection, _dbTransaction, transactionId, erc20Transfer)));
+                        Erc20TransferWriter.Insert(_connection, _dbTransaction, hash, index, timestamp, block_number, erc20Transfer);
                         break;
                     case GnosisSafeEthTransfer gnosisSafeEthTransfer:
-                        detailIds.Add(Tuple.Create("GnosisSafeEthTransfer", GnosisSafeEthTransferWriter.Insert(_connection, _dbTransaction, transactionId, gnosisSafeEthTransfer)));
+                        GnosisSafeEthTransferWriter.Insert(_connection, _dbTransaction, hash, index, timestamp, block_number, gnosisSafeEthTransfer);
                         break;
                     case EthTransfer ethTransfer:
-                        detailIds.Add(Tuple.Create("EthTransfer", EthTransferWriter.Insert(_connection, _dbTransaction, transactionId, ethTransfer)));
+                        EthTransferWriter.Insert(_connection, _dbTransaction, hash, index, timestamp, block_number, ethTransfer);
                         break;
                     case CrcSignup crcSignup:
-                        detailIds.Add(Tuple.Create("CrcSignup", CrcSignupWriter.Insert(_connection, _dbTransaction, transactionId, crcSignup)));
+                        CrcSignupWriter.Insert(_connection, _dbTransaction, hash, index, timestamp, block_number, crcSignup);
                         break;
                     case CrcOrganisationSignup crcOrganisationSignup:
-                        detailIds.Add(Tuple.Create("CrcOrganisationSignup", CrcOrganisationSignupWriter.Insert(_connection, _dbTransaction, transactionId, crcOrganisationSignup)));
+                        CrcOrganisationSignupWriter.Insert(_connection, _dbTransaction, hash, index, timestamp, block_number, crcOrganisationSignup);
                         break;
                 }
             }
-            
-            return detailIds.ToImmutableArray();
         }
     }
 }
