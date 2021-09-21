@@ -17,7 +17,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             GnosisSafeEthTransfer data)
         {
             const string InsertGnosisSafeEthTransferSql = @"
-                insert into gnosis_safe_eth_transfer_2 (
+                insert into gnosis_safe_eth_transfer_staging (
                       hash
                     , index                    
                     , timestamp                

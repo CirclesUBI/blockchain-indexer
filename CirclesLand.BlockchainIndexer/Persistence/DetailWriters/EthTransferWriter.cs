@@ -17,7 +17,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             EthTransfer data)
         {
             const string InsertEthTransferSql = @"
-            insert into eth_transfer_2 (
+            insert into eth_transfer_staging (
                       hash
                     , index                    
                     , timestamp                

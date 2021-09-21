@@ -17,7 +17,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             CrcHubTransfer data)
         {
             const string InsertCrcTransferSql = @"
-                insert into crc_hub_transfer_2 (
+                insert into crc_hub_transfer_staging (
                       hash
                     , index                    
                     , timestamp                

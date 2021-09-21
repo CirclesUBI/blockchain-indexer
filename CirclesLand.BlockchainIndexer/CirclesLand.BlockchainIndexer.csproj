@@ -12,7 +12,7 @@
       <PackageReference Include="Nethereum.Hex" Version="4.0.5" />
       <PackageReference Include="Nethereum.JsonRpc.WebSocketClient" Version="4.0.5" />
       <PackageReference Include="Nethereum.Web3" Version="4.0.4" />
-      <PackageReference Include="Npgsql" Version="6.0.0-preview6" />
+      <PackageReference Include="Npgsql" Version="6.0.0-preview7" />
     </ItemGroup>
 
     <ItemGroup>

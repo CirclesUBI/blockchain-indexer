@@ -17,7 +17,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             Erc20Transfer data)
         {
             const string InserErc20TransferSql = @"
-                insert into erc20_transfer_2 (
+                insert into erc20_transfer_staging (
                       hash
                     , index                    
                     , timestamp                

@@ -17,7 +17,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             CrcTrust data)
         {
             const string InsertCrcTrustSql = @"
-                insert into crc_trust_2 (
+                insert into crc_trust_staging (
                       hash
                     , index                    
                     , timestamp                

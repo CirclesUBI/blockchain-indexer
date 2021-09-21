@@ -17,7 +17,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence.DetailWriters
             CrcSignup data)
         {
             const string InsertCrcSignupSql = @"
-                insert into crc_signup_2 (
+                insert into crc_signup_staging (
                       hash
                     , index                    
                     , timestamp                
