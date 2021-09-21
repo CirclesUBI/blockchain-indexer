@@ -797,7 +797,9 @@ into block_staging
 from block
 limit 0;
 
-create index ix_block_staging_selected_at on _block_staging(number) include (selected_at);
+create index ix_block_staging_number on _block_staging(number) include (hash, selected_at);
+create index ix_block_staging_selected_at_ on _block_staging(selected_at) include (hash, number);
+create index ix_block_staging_imported_at on _block_staging(imported_at) include (hash, number);
 
 select hash, hash, index, timestamp, block_number, "from", "to", value::text
 into crc_hub_transfer_staging
@@ -860,86 +862,85 @@ from transaction_2
 limit 0;
 
 create index ix_transaction_staging_hash on _transaction_staging(hash) include (block_number);
+create index ix_transaction_staging_block_number on _transaction_staging(block_number) include (hash);
 
 create or replace view selected_staging_blocks
 as
-select distinct *
+select *
 from _block_staging
 where selected_at is not null
   and imported_at is null;
 
 create or replace view imported_staging_blocks
 as
-select distinct *
+select *
 from _block_staging
-where (selected_at is not null
-  and imported_at is not null)
-  or already_available is not null;
+where imported_at is not null;
 
 create or replace view selected_staging_transactions
 as
-select distinct s.selected_at, ts.*
+select s.selected_at, ts.*
 from _transaction_staging ts
          join selected_staging_blocks s on ts.block_number = s.number;
 
 create or replace view imported_staging_transactions
 as
-select distinct s.imported_at, ts.*
+select s.imported_at, ts.*
 from _transaction_staging ts
          join imported_staging_blocks s on ts.block_number = s.number;
 
 create or replace view selected_staging_hub_transfers
 as
-select distinct ts.selected_at, s.*
+select ts.selected_at, s.*
 from selected_staging_transactions ts
          join _crc_hub_transfer_staging s on ts.hash = s.hash;
 
 create or replace view selected_staging_organisation_signups
 as
-select distinct ts.selected_at, s.*
+select ts.selected_at, s.*
 from selected_staging_transactions ts
          join _crc_organisation_signup_staging s on ts.hash = s.hash;
 
 create or replace view selected_staging_signups
 as
-select distinct ts.selected_at, s.*
+select ts.selected_at, s.*
 from selected_staging_transactions ts
          join _crc_signup_staging s on ts.hash = s.hash;
 
 create or replace view selected_staging_trusts
 as
-select distinct ts.selected_at, s.*
+select ts.selected_at, s.*
 from selected_staging_transactions ts
          join _crc_trust_staging s on ts.hash = s.hash;
 
 create or replace view selected_staging_erc20_transfers
 as
-select distinct ts.selected_at, s.*
+select ts.selected_at, s.*
 from selected_staging_transactions ts
          join _erc20_transfer_staging s on ts.hash = s.hash;
 
 create or replace view selected_staging_eth_transfers
 as
-select distinct ts.selected_at, s.*
+select ts.selected_at, s.*
 from selected_staging_transactions ts
          join _eth_transfer_staging s on ts.hash = s.hash;
 
 create or replace view selected_staging_safe_eth_transfers
 as
-select distinct ts.selected_at, s.*
+select ts.selected_at, s.*
 from selected_staging_transactions ts
          join _gnosis_safe_eth_transfer_staging s on ts.hash = s.hash;
 
-
 create or replace procedure import_from_staging()
+    language plpgsql
 as
-$yolo$
+$$
 declare
     selected_at_ts timestamp;
     imported_at_ts timestamp;
 begin
     select now() into selected_at_ts;
-        
+
     update _block_staging b
     set already_available = true
     from
@@ -951,7 +952,7 @@ begin
             having b.total_transaction_count = count(distinct t.hash)
         ) a
     where a.number = b.number;
-    
+
     update _block_staging b
     set selected_at = selected_at_ts
     from
@@ -966,142 +967,150 @@ begin
     where a.number = b.number;
 
     insert into block
-    select sb.number, sb.hash, sb.timestamp, sb.total_transaction_count, 0
-    from selected_staging_blocks sb
-             left join block b on sb.number = b.number
-    where b.number is null
-      and selected_at = selected_at_ts;
+        select distinct sb.number, sb.hash, sb.timestamp, sb.total_transaction_count, 0 as indexed_transaction_count
+        from selected_staging_blocks sb
+                 left join block b on sb.hash = b.hash or sb.number = b.number
+        where b.number is null and b.hash is null
+          and selected_at = selected_at_ts;
 
     insert into transaction_2
-    select sb.block_number
-         , sb."from"
-         , sb."to"
-         , sb.hash
-         , sb.index
-         , sb.timestamp
-         , sb.value::numeric
-         , sb.input
-         , sb.nonce
-         , sb.type
-         , sb.classification
-    from selected_staging_transactions sb
-             left join transaction_2 b on sb.hash = b.hash
-    where b.hash is null
-      and selected_at = selected_at_ts;
+        select distinct sb.block_number
+                      , sb."from"
+                      , sb."to"
+                      , sb.hash
+                      , sb.index
+                      , sb.timestamp
+                      , sb.value::numeric
+                      , sb.input
+                      , sb.nonce
+                      , sb.type
+                      , sb.classification
+        from selected_staging_transactions sb
+                 left join transaction_2 b on sb.hash = b.hash
+        where b.hash is null
+          and sb.selected_at = selected_at_ts;
 
     insert into crc_hub_transfer_2
-    select sb.hash
-         , sb.index
-         , sb.timestamp
-         , sb.block_number
-         , sb."from"
-         , sb."to"
-         , sb.value::numeric
-    from selected_staging_hub_transfers sb
-             left join crc_hub_transfer_2 b
-                       on sb.hash = b.hash
-                           and sb."from" = b."from"
-                           and sb."to" = b."to"
-                           and sb.value::numeric = b.value
-    where b.hash is null
-      and selected_at = selected_at_ts;
+        select distinct sb.hash
+                      , sb.index
+                      , sb.timestamp
+                      , sb.block_number
+                      , sb."from"
+                      , sb."to"
+                      , sb.value::numeric
+        from selected_staging_hub_transfers sb
+                 join transaction_2 t on t.hash = sb.hash
+                 left join crc_hub_transfer_2 b
+                           on sb.hash = b.hash
+                               and sb."from" = b."from"
+                               and sb."to" = b."to"
+                               and sb.value::numeric = b.value
+        where b.hash is null
+          and selected_at = selected_at_ts;
 
     insert into crc_organisation_signup_2
-    select sb.hash
-         , sb.index
-         , sb.timestamp
-         , sb.block_number
-         , sb.organisation
-    from selected_staging_organisation_signups sb
-             left join crc_organisation_signup_2 b on sb."organisation" = b."organisation"
-    where b.hash is null
-      and selected_at = selected_at_ts;
+        select distinct sb.hash
+                      , sb.index
+                      , sb.timestamp
+                      , sb.block_number
+                      , sb.organisation
+        from selected_staging_organisation_signups sb
+                 join transaction_2 t on t.hash = sb.hash
+                 left join crc_organisation_signup_2 b on sb."organisation" = b."organisation"
+        where b.hash is null
+          and selected_at = selected_at_ts;
 
     insert into crc_signup_2
-    select sb.hash
-         , sb.index
-         , sb.timestamp
-         , sb.block_number
-         , sb.user
-         , sb.token
-    from selected_staging_signups sb
-             left join crc_signup_2 b on sb."user" = b."user"
-    where b.hash is null
-      and selected_at = selected_at_ts;
+        select distinct sb.hash
+                      , sb.index
+                      , sb.timestamp
+                      , sb.block_number
+                      , sb.user
+                      , sb.token
+        from selected_staging_signups sb
+                 join transaction_2 t on t.hash = sb.hash
+                 left join crc_signup_2 b on sb."user" = b."user"
+        where b.hash is null
+          and selected_at = selected_at_ts;
 
     insert into crc_trust_2
-    select sb.hash
-         , sb.index
-         , sb.timestamp
-         , sb.block_number
-         , sb.address
-         , sb.can_send_to
-         , sb."limit"
-    from selected_staging_trusts sb
-             left join crc_trust_2 b on sb.hash = b.hash
-        and sb.address = b.address
-        and sb.can_send_to = b.can_send_to
-        and sb."limit" = b."limit"
-    where b.hash is null
-      and selected_at = selected_at_ts;
+        select distinct sb.hash
+                      , sb.index
+                      , sb.timestamp
+                      , sb.block_number
+                      , sb.address
+                      , sb.can_send_to
+                      , sb."limit"
+        from selected_staging_trusts sb
+                 join transaction_2 t on t.hash = sb.hash
+                 left join crc_trust_2 b on sb.hash = b.hash
+            and sb.address = b.address
+            and sb.can_send_to = b.can_send_to
+            and sb."limit" = b."limit"
+        where b.hash is null
+          and selected_at = selected_at_ts;
 
     insert into erc20_transfer_2
-    select sb.hash
-         , sb.index
-         , sb.timestamp
-         , sb.block_number
-         , sb."from"
-         , sb."to"
-         , sb.token
-         , sb.value::numeric
-    from selected_staging_erc20_transfers sb
-             left join erc20_transfer_2 b on sb.hash = b.hash
-        and sb."from" = b."from"
-        and sb."to" = b."to"
-        and sb.token = b.token
-        and sb.value::numeric = b.value
-    where b.hash is null
-      and selected_at = selected_at_ts;
+        select distinct sb.hash
+                      , sb.index
+                      , sb.timestamp
+                      , sb.block_number
+                      , sb."from"
+                      , sb."to"
+                      , sb.token
+                      , sb.value::numeric
+        from selected_staging_erc20_transfers sb
+                 join transaction_2 t on t.hash = sb.hash
+                 left join erc20_transfer_2 b on sb.hash = b.hash
+            and sb."from" = b."from"
+            and sb."to" = b."to"
+            and sb.token = b.token
+            and sb.value::numeric = b.value
+        where b.hash is null
+          and selected_at = selected_at_ts;
 
     insert into eth_transfer_2
-    select sb.hash
-         , sb.index
-         , sb.timestamp
-         , sb.block_number
-         , sb."from"
-         , sb."to"
-         , sb.value::numeric
-    from selected_staging_eth_transfers sb
-             left join eth_transfer_2 b on sb.hash = b.hash
-        and sb."from" = b."from"
-        and sb."to" = b."to"
-        and sb.value::numeric = b.value
-    where b.hash is null
-      and selected_at = selected_at_ts;
+        select distinct sb.hash
+                      , sb.index
+                      , sb.timestamp
+                      , sb.block_number
+                      , sb."from"
+                      , sb."to"
+                      , sb.value::numeric
+        from selected_staging_eth_transfers sb
+                 join transaction_2 t on t.hash = sb.hash
+                 left join eth_transfer_2 b on sb.hash = b.hash
+            and sb."from" = b."from"
+            and sb."to" = b."to"
+            and sb.value::numeric = b.value
+        where b.hash is null
+          and selected_at = selected_at_ts;
 
     insert into gnosis_safe_eth_transfer_2
-    select sb.hash
-         , sb.index
-         , sb.timestamp
-         , sb.block_number
-         , sb.initiator
-         , sb."from"
-         , sb."to"
-         , sb.value::numeric
-    from selected_staging_safe_eth_transfers sb
-             left join gnosis_safe_eth_transfer_2 b on sb.hash = b.hash
-        and sb."from" = b."from"
-        and sb."to" = b."to"
-        and sb.initiator = b.initiator
-        and sb.value::numeric = b.value
-    where b.hash is null
-      and selected_at = selected_at_ts;
+        select distinct sb.hash
+                      , sb.index
+                      , sb.timestamp
+                      , sb.block_number
+                      , sb.initiator
+                      , sb."from"
+                      , sb."to"
+                      , sb.value::numeric
+        from selected_staging_safe_eth_transfers sb
+                 join transaction_2 t on t.hash = sb.hash
+                 left join gnosis_safe_eth_transfer_2 b on sb.hash = b.hash
+            and sb."from" = b."from"
+            and sb."to" = b."to"
+            and sb.initiator = b.initiator
+            and sb.value::numeric = b.value
+        where b.hash is null
+          and selected_at = selected_at_ts;
 
     select now() into imported_at_ts;
 
     update _block_staging b
-    set imported_at = imported_at_ts
-    where selected_at = selected_at_ts;
+        set imported_at = imported_at_ts
+    where selected_at = selected_at_ts
+      or already_available is not null;
 
     delete from _crc_hub_transfer_staging s
         using imported_staging_transactions i
@@ -1138,6 +1147,14 @@ begin
     delete from _block_staging s
         using imported_staging_blocks i
     where s.number = i.number;
+    
+    delete from _transaction_staging s
+    using (
+        select ts.hash
+        from _transaction_staging ts 
+            left join _block_staging bs on bs.number = ts.block_number 
+        where bs.number is null) twob
+    where s.hash = twob.hash;
+    
 end;
-$yolo$
-    language plpgsql;
+$$;

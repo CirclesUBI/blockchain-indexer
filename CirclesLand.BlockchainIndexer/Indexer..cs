@@ -489,6 +489,7 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                 }
 
                 Interlocked.Increment(ref _committing);
+                
                 Console.WriteLine("committing...");
                 using var importConnection = new NpgsqlConnection(_connectionString);
                 importConnection.Open();
@@ -511,7 +512,6 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                 {
                     Interlocked.Decrement(ref _committing);
                 }
-
             });
 
             var elapsedTime = DateTime.Now - startedAt;
