@@ -118,7 +118,10 @@ namespace CirclesLand.BlockchainIndexer.Server
             };
             
             // TODO: Use cancellation token
-            // indexer.Run();
+            indexer.Run(writtenBlock =>
+            {
+                
+            });
 
             DotNetHost.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>

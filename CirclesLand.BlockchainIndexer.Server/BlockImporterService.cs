@@ -23,7 +23,6 @@ namespace CirclesLand.BlockchainIndexer.Server
             {
             }
 
-
             protected override async Task<string> Emit(CancellationToken cancellationToken)
             {
                 throw new NotImplementedException("Cannot emit");
@@ -43,16 +42,14 @@ namespace CirclesLand.BlockchainIndexer.Server
                     return;
                 }
 
+                // var indexer = new Indexer(Program.ConnectionString, Program.RpcGatewayUrl);
+                // indexer.Run();
+                
+                
+                
                 _lastProcessedBlock = currentBlock;
 
                 await Participant.SetSignal(true, "publish", payload);
-
-                /*
-                Console.WriteLine("------------------------------------------------");
-                Console.WriteLine("Got work:");
-                Console.WriteLine(payload);
-                Console.WriteLine("------------------------------------------------");
-                */
             }
         }
 

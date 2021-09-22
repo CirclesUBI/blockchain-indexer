@@ -18,6 +18,7 @@ using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
 using Nethereum.Hex.HexTypes;
 using Nethereum.RPC.Eth.DTOs;
 using Nethereum.Web3;
+using Newtonsoft.Json;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -95,7 +96,7 @@ namespace CirclesLand.BlockchainIndexer
             totalProcessedErc20Transfers = 0;
             totalProcessedBlocks = 0;
             totalDownloadedTransactions = 0;
-            
+
             ticks = DateTime.Now.Ticks;
             blockTableName = $"_block_staging"; //_{ticks}";
             transactionTableName = $"_transaction_staging"; //_{ticks}";
@@ -190,7 +191,8 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
             const int maxErrorRestartPenalty = 3 * 60 * 1000;
             var currentErrorRestarts = 0;
             Exception? lastRoundError = null;
-            const int batchSize = 2500;
+            const int batchSize = 2000;
+            const int batchInterval = 2;
 
             void ResetErrorPenalty()
             {
@@ -212,6 +214,7 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                                    $"starting again after an error.");
 
                         await Task.Delay(errorRestartPenaltyInMs);
+                        
                     }
 
                     await using var writerConnection = new NpgsqlConnection(_connectionString);
@@ -230,6 +233,22 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                         // ignored
                     }
 
+                    if (lastRoundError != null)
+                    {
+                        Logger.Log("Clearing the staging tables after an error ..");
+                        writerConnection.Execute(@"
+                            truncate _block_staging;
+                            truncate _crc_hub_transfer_staging;
+                            truncate _crc_organisation_signup_staging;
+                            truncate _crc_signup_staging;
+                            truncate _erc20_transfer_staging;
+                            truncate _eth_transfer_staging;
+                            truncate _gnosis_safe_eth_transfer_staging;
+                            truncate _transaction_staging;
+                        ");
+                        Logger.Log("Staging tables have been cleared.");
+                    }
+
                     Source<HexBigInteger, NotUsed> source;
                     var web3 = new Web3(_rpcEndpointUrl);
 
@@ -241,25 +260,22 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
 
                     var lastKnownBlock = writerConnection.QuerySingleOrDefault<long?>(
                         @"with a as (
-                                select block_number
-                                from transaction_2 t
-                                         join block b on t.block_number = b.number
-                                where block_number >= 17907816
-                                group by block_number, b.total_transaction_count
-                                having count(t.hash) != b.total_transaction_count
-                                order by block_number
+                                select distinct block_no
+                                from requested_blocks
+                                order by block_no
                             ), b as (
-                                select min(block_number) as block_number
-                                from a
-                            ), c as (
-                                select max(number) as block_number
+                                select distinct number
                                 from block
-                                union all
-                                select block_number
-                                from b
-                                where b.block_number is not null
+                                order by number
+                            ), c as (
+                                select a.block_no as requested, b.number as actual
+                                from a
+                                left join b on a.block_no = b.number
+                                order by a.block_no
                             )
-                            select min(block_number) from c;") ?? 12529458;
+                            select min(c.requested) - 1 as last_correctly_imported_block
+                            from c
+                            where actual is null;") ?? 12529458;
 
                     _firstNewBlock = lastKnownBlock - 1;
 
@@ -281,34 +297,71 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                         Mode = IndexerMode.Polling;
                     }
 
+                    int healthCheckCounter = 0;
+                    int committingUntilRounds = 0;
+                    
+                    Exception? healthCheckError = null;
+
                     await source
+                        .Select(o =>
+                        {
+                            writerConnection.Execute($@"
+                                    insert into requested_blocks (block_no)
+                                    values (@number) on conflict do nothing;",
+                                new
+                                {
+                                    number = o.ToLong()
+                                });
+                            return o;
+                        })
                         // Get the full block with all transactions
                         .SelectAsync(maxBlockDownloads, currentBlockNo =>
                             web3.Eth.Blocks
                                 .GetBlockWithTransactionsByNumber
                                 .SendRequestAsync(currentBlockNo))
-
+                        .Buffer(maxBlockDownloads, OverflowStrategy.Backpressure)
                         // Bundle the every transaction in a block with the block timestamp and send it downstream
                         .SelectMany(block =>
                         {
                             Interlocked.Increment(ref totalBlocksDownloaded);
 
-                            var transactions = block.Transactions
+                            var t = block.Transactions.ToArray();
+                            Interlocked.Add(ref totalTransactionsDownloaded, t.Length);
+
+                            if (t.Length == 0)
+                            {
+                                var blockTimestamp = block.Timestamp.ToLong();
+                                var blockTimestampDateTime =
+                                    DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
+
+                                writerConnection.Execute($@"
+                                    insert into _block_staging (number, hash, timestamp, total_transaction_count)
+                                    values (@number, @hash, @timestamp, 0);",
+                                    new
+                                    {
+                                        number = block.Number.ToLong(),
+                                        hash = block.BlockHash,
+                                        timestamp = blockTimestampDateTime
+                                    });
+                            }
+
+                            var transactions = t
                                 .Select(o => (
-                                    TotalTransactionsInBlock: block.Transactions.Length,
+                                    TotalTransactionsInBlock: t.Length,
                                     Timestamp: block.Timestamp,
                                     Transaction: o))
                                 .ToArray();
 
                             return transactions;
                         })
-                        .Buffer(maxBlockDownloads * 4, OverflowStrategy.Backpressure)
-
+                        .Buffer(maxReceiptDownloads, OverflowStrategy.Backpressure)
                         // Add the receipts for every transaction
                         .SelectAsync(maxReceiptDownloads, async timestampAndTransaction =>
                         {
                             var receipt = await web3.Eth.Transactions.GetTransactionReceipt.SendRequestAsync(
                                 timestampAndTransaction.Transaction.TransactionHash);
+
+                            Interlocked.Increment(ref totalReceiptsDownloaded);
 
                             return (
                                 TotalTransactionsInBlock: timestampAndTransaction.TotalTransactionsInBlock,
@@ -317,8 +370,6 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                                 Receipt: receipt
                             );
                         })
-                        .Buffer(maxReceiptDownloads * 4, OverflowStrategy.Backpressure)
-
                         // Classify all transactions
                         .Select(transactionAndReceipt =>
                         {
@@ -355,10 +406,139 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                                 Details: extractedDetails
                             );
                         })
-                        .GroupedWithin(batchSize, TimeSpan.FromSeconds(5))
-                        .Buffer(20, OverflowStrategy.Backpressure)
+                        .GroupedWithin(batchSize, TimeSpan.FromSeconds(batchInterval))
+                        .Buffer(5, OverflowStrategy.Backpressure)
                         .RunForeach(transactionsWithExtractedDetails =>
                         {
+                            if (healthCheckError != null)
+                            {
+                                throw new Exception("The health check failed. See inner exception for details.",
+                                    healthCheckError);
+                            }
+
+                            healthCheckCounter++;
+                            
+                            if ((healthCheckCounter == 15 || healthCheckCounter >= 30) && _committing == 0)
+                            {
+                                var maxUpstreamCachedTransactions = maxBlockDownloads * maxReceiptDownloads;
+                                var maxPersistenceCachedTransactions = 5 * batchSize;
+                                var maxCachedTransactions = (maxUpstreamCachedTransactions + maxPersistenceCachedTransactions) / 5;
+
+                                Console.WriteLine($"Max tolerated backlog size (blocks): {maxCachedTransactions}");
+
+                                var healthCheckSql =
+                                    @$"with max_imported as (
+                                    select max(number) as number from block
+                                ), max_staging as (
+                                    select max(number) as number from _block_staging
+                                ), min_missing as (
+                                    select min(block_no) -1 missing_block_begin
+                                    from requested_blocks rb
+                                    left join block b on rb.block_no = b.number and b.number < (select number from max_imported)
+                                    where b.number is null
+                                ), c as (
+                                    select (select number from max_staging) - (select number from max_imported) as staging_distance
+                                         , (select number from max_imported) - missing_block_begin              as imported_distance
+                                    from min_missing
+                                )
+                                select *
+                                from c
+                                where c.imported_distance >= {(long) maxCachedTransactions}
+                                   or c.staging_distance >= {(long) maxCachedTransactions};";
+
+                                var cleanupSql = @"
+                                delete from _gnosis_safe_eth_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                delete from _eth_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                delete from _erc20_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                delete from _crc_trust_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                delete from _crc_signup_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                delete from _crc_organisation_signup_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                delete from _crc_hub_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                delete from _transaction_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                delete from _block_staging where imported_at is not null;";
+
+                                Task.Run(() =>
+                                {
+                                    Console.WriteLine("Performing health check ...");
+                                    var hcs = DateTime.Now;
+                                    using var healthCheckConnection = new NpgsqlConnection(_connectionString);
+                                    healthCheckConnection.Open();
+
+                                    try
+                                    {
+                                        var healthCheckResult = healthCheckConnection.QueryFirstOrDefault(
+                                            healthCheckSql,
+                                            null,
+                                            null, 10);
+
+                                        if (healthCheckResult != null)
+                                        {
+                                            // Will crash repeatedly if the gap is large until the gap is small enough
+                                            // so that it doesn't trigger this exception anymore. O.k. for now (and maybe the future).
+                                            healthCheckError =
+                                                new Exception(
+                                                    $"Found possible data corruption ('blocks' table contains a gap of at least {maxCachedTransactions} blocks):\n {JsonConvert.SerializeObject(healthCheckResult)}.");
+                                            var hcsDuration = DateTime.Now - hcs;
+                                            Console.WriteLine($"Unhealthy (check took {hcsDuration})");
+                                        }
+                                        else
+                                        {
+                                            var hcsDuration = DateTime.Now - hcs;
+                                            Console.WriteLine($"HEALTHY (check took {hcsDuration})");
+
+                                            if (healthCheckCounter == 30)
+                                            {
+                                                var t = healthCheckConnection.BeginTransaction(IsolationLevel
+                                                    .ReadCommitted);
+                                                Console.WriteLine("Performing cleanup of staging tables ...");
+                                                healthCheckConnection.Execute(cleanupSql, null, t, 20);
+                                                Console.WriteLine("Cleaned the staging tables.");
+                                                t.Commit();
+                                            }
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine(ex.Message);
+                                        Console.WriteLine(ex.StackTrace);
+                                        healthCheckError = ex;
+                                        throw;
+                                    }
+                                    
+                                    if (healthCheckCounter >= 30)
+                                    {
+                                        healthCheckCounter = 0;
+                                    }
+                                });
+                            }
+
+                            if (_committing > 0)
+                            {
+                                committingUntilRounds++;
+                            }
+                            else
+                            {
+                                committingUntilRounds = 0;
+                            }
+
+                            var waitForCommitAfterNthRound = 7;
+                            if (committingUntilRounds >= waitForCommitAfterNthRound && commitTask != null)
+                            {
+                                var timeoutIn = TimeSpan.FromSeconds(45);
+                                var timeout = DateTime.Now + timeoutIn;
+                                Console.WriteLine($".. Backpressure because the commit didn't finish within " +
+                                                  $"{batchInterval * waitForCommitAfterNthRound} seconds " +
+                                                  $"or {batchSize * waitForCommitAfterNthRound} new incoming " +
+                                                  $"transactions ... (waiting max. {timeoutIn})");
+                                commitTask.Wait(timeoutIn + TimeSpan.FromMilliseconds(10));
+                                if (DateTime.Now > timeout)
+                                {
+                                    throw new Exception("Timed out while waiting for commit.");
+                                }
+                                Console.WriteLine("Backpressure resolved.");
+                                committingUntilRounds = 0;
+                            }
+
                             WriteTransactions(
                                 writerConnection,
                                 transactionsWithExtractedDetails,
@@ -392,6 +572,9 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
         }
 
         private static int _committing = 0;
+        private static long totalTransactionsDownloaded;
+        private static long totalReceiptsDownloaded;
+        Task? commitTask = null;
 
         private void WriteTransactions(
             NpgsqlConnection writerConnection,
@@ -408,32 +591,31 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
         {
             var transactionsWithExtractedDetailsArr = transactionsWithExtractedDetails.ToArray();
 
+            var blockList =
+                new HashSet<(long BlockNumber, DateTime BlockTimestamp, string hash, int totalTransactionCount)>();
+
+            foreach (var t in transactionsWithExtractedDetailsArr)
+            {
+                var blockTimestamp = t.Timestamp.ToLong();
+                var blockTimestampDateTime = DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
+                blockList.Add((
+                    BlockNumber: t.Transaction.BlockNumber.ToLong(),
+                    BlockTimestamp: blockTimestampDateTime,
+                    hash: t.Transaction.BlockHash,
+                    totalTransactionCount: t.TotalTransactionsInBlock
+                ));
+            }
+
+            WriteBlocks(writerConnection, blockTableName, blockList);
+
             var details =
                 transactionsWithExtractedDetailsArr.SelectMany(transaction =>
                         transaction.Details.Select(detail => (transaction, detail)))
                     .ToArray();
 
-            var blocks = details
-                .Aggregate(ImmutableHashSet.Create<(DateTime, int, Transaction)>(),
-                    (p, c) =>
-                    {
-                        var blockTimestamp = c.transaction.Timestamp.ToLong();
-                        var blockTimestampDateTime = DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
-                        return p.Add(
-                            (blockTimestampDateTime, c.transaction.TotalTransactionsInBlock,
-                                c.transaction.Transaction));
-                    })
-                .Aggregate(
-                    ImmutableHashSet
-                        .Create<(long BlockNumber, DateTime BlockTimestamp, string hash, int totalTransactionCount)>(),
-                    (p, c) => p.Add((c.Item3.BlockNumber.ToLong(), c.Item1, c.Item3.BlockHash, c.Item2)))
-                .ToArray();
-
-            WriteBlocks(writerConnection, blockTableName, blocks);
-
             WriteTransactionRows(
                 writerConnection,
-                transactionsWithExtractedDetails,
+                transactionsWithExtractedDetailsArr,
                 transactionTableName);
 
             var hubTransfers =
@@ -480,39 +662,38 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                     o.detail is GnosisSafeEthTransfer);
 
             WriteSafeEthTransfers(writerConnection, gnosisSafeEthTransferTableName, safeEthTransfers);
-            //
-            Task.Run(() =>
-            {
-                if (_committing > 0)
-                {
-                    return;
-                }
 
+
+            if (_committing == 0)
+            {
                 Interlocked.Increment(ref _committing);
                 
-                Console.WriteLine("committing...");
-                using var importConnection = new NpgsqlConnection(_connectionString);
-                importConnection.Open();
-                using var transaction = importConnection.BeginTransaction(IsolationLevel.ReadCommitted);
+                commitTask = Task.Run(() =>
+                {
+                    Console.WriteLine("committing...");
+                    using var importConnection = new NpgsqlConnection(_connectionString);
+                    importConnection.Open();
+                    using var transaction = importConnection.BeginTransaction(IsolationLevel.ReadCommitted);
 
-                try
-                {
-                    importConnection.Execute("call import_from_staging();", null, transaction);
-                    transaction.Commit();
-                    Console.WriteLine($"COMITTED");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.Message);
-                    Console.WriteLine(ex.StackTrace);
-                    transaction.Rollback();
-                    throw;
-                }
-                finally
-                {
-                    Interlocked.Decrement(ref _committing);
-                }
-            });
+                    try
+                    {
+                        importConnection.Execute("call import_from_staging_2();", null, transaction, 45);
+                        transaction.Commit();
+                        Console.WriteLine($"COMITTED");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex.Message);
+                        Console.WriteLine(ex.StackTrace);
+                        transaction.Rollback();
+                        throw;
+                    }
+                    finally
+                    {
+                        Interlocked.Decrement(ref _committing);
+                    }
+                });
+            }
 
             var elapsedTime = DateTime.Now - startedAt;
             var defaultColor = Console.ForegroundColor;

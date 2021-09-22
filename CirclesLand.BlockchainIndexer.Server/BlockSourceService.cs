@@ -42,7 +42,7 @@ namespace CirclesLand.BlockchainIndexer.Server
                             var currentBlock = (await web3.Eth.Blocks.GetBlockNumber.SendRequestAsync()).ToLong();
                             if (currentBlock <= _lastEmittedBlock)
                             {
-                                await Task.Delay(100, cancellationToken);
+                                await Task.Delay(1000, cancellationToken);
                             }
                             else
                             {

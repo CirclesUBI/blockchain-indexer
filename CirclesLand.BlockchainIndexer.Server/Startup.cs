@@ -16,8 +16,8 @@ namespace KestrelWebSocketServer
             // register our custom middleware since we use the IMiddleware factory approach
             services.AddTransient<WebsocketService>();
             // services.AddHostedService<IndexerService>();
-            services.AddHostedService<BlockSourceService>();
-            services.AddHostedService<BlockImporterService>();
+            // services.AddHostedService<BlockSourceService>();
+            // services.AddHostedService<BlockImporterService>();
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

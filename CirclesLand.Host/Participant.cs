@@ -28,8 +28,8 @@ namespace CirclesLand.Host
 
         public ConcurrentDictionary<string, DateTime> KnownInstances { get; } = new();
 
-        private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string?>> _knownSignalsByInstance =
-            new();
+        private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string?>> 
+            _knownSignalsByInstance = new();
 
         private bool _isRunning = false;
         private bool _isPrimary = false;
