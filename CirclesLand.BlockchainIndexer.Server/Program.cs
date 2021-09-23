@@ -66,8 +66,25 @@ namespace CirclesLand.BlockchainIndexer.Server
             }
 
             Debug.Assert(rpcGatewayUri != null, nameof(rpcGatewayUri) + " != null");
+
+            Settings.ConnectionString = connectionString;
+            Settings.RpcEndpointUrl = rpcGatewayUri.ToString();
             
-            var indexer = new Indexer(connectionString!, rpcGatewayUri.ToString());
+            var indexer = new Indexer();
+            // TODO: Use cancellation token
+            indexer.Run();
+            
+
+            DotNetHost.CreateDefaultBuilder(args)
+                .ConfigureWebHostDefaults(webBuilder =>
+                {
+                    webBuilder.UseUrls(@$"{websocketUrl}");
+                    webBuilder.UseStartup<Startup>();
+                })
+                .Build()
+                .Run();
+            
+            /*
             indexer.NewBlock += (s, e) =>
             {
                 Task.Run(() =>
@@ -116,21 +133,7 @@ namespace CirclesLand.BlockchainIndexer.Server
                     }
                 });
             };
-            
-            // TODO: Use cancellation token
-            indexer.Run(writtenBlock =>
-            {
-                
-            });
-
-            DotNetHost.CreateDefaultBuilder(args)
-                .ConfigureWebHostDefaults(webBuilder =>
-                {
-                    webBuilder.UseUrls(@$"{websocketUrl}");
-                    webBuilder.UseStartup<Startup>();
-                })
-                .Build()
-                .Run();
+            */
         }
     }
 }
