@@ -298,6 +298,7 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                     }
 
                     int healthCheckCounter = 0;
+                    int cleanupCounter = 0;
                     int committingUntilRounds = 0;
                     
                     Exception? healthCheckError = null;
@@ -416,10 +417,42 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                                     healthCheckError);
                             }
 
+                            cleanupCounter++;
+
+                            if (cleanupCounter >= 100)
+                            {
+                                cleanupCounter = 0;
+                                
+                                var cleanupStarted = DateTime.Now;
+                                using var cleanupConnection = new NpgsqlConnection(_connectionString);
+                                cleanupConnection.Open();
+                                
+                                var cleanupSql = @"
+                                    delete from _gnosis_safe_eth_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                    delete from _eth_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                    delete from _erc20_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                    delete from _crc_trust_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                    delete from _crc_signup_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                    delete from _crc_organisation_signup_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                    delete from _crc_hub_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                    delete from _transaction_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                                    delete from _block_staging where imported_at is not null;";
+                                
+                                var t = cleanupConnection.BeginTransaction(IsolationLevel
+                                    .ReadCommitted);
+                                Console.WriteLine("Performing cleanup of staging tables ...");
+                                cleanupConnection.Execute(cleanupSql, null, t, 20);
+                                var cleanupDuration = DateTime.Now - cleanupStarted;
+                                Console.WriteLine($"Cleaned the staging tables. Took {cleanupDuration}");
+                                t.Commit();
+                            }
+                            
                             healthCheckCounter++;
                             
-                            if ((healthCheckCounter == 15 || healthCheckCounter >= 30) && _committing == 0)
-                            {
+                            if (healthCheckCounter >= 15 && _committing == 0)
+                            {   
+                                healthCheckCounter = 0;
+                            
                                 var maxUpstreamCachedTransactions = maxBlockDownloads * maxReceiptDownloads;
                                 var maxPersistenceCachedTransactions = 5 * batchSize;
                                 var maxCachedTransactions = (maxUpstreamCachedTransactions + maxPersistenceCachedTransactions) / 5;
@@ -445,17 +478,6 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                                 from c
                                 where c.imported_distance >= {(long) maxCachedTransactions}
                                    or c.staging_distance >= {(long) maxCachedTransactions};";
-
-                                var cleanupSql = @"
-                                delete from _gnosis_safe_eth_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-                                delete from _eth_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-                                delete from _erc20_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-                                delete from _crc_trust_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-                                delete from _crc_signup_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-                                delete from _crc_organisation_signup_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-                                delete from _crc_hub_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-                                delete from _transaction_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-                                delete from _block_staging where imported_at is not null;";
 
                                 Task.Run(() =>
                                 {
@@ -485,16 +507,6 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                                         {
                                             var hcsDuration = DateTime.Now - hcs;
                                             Console.WriteLine($"HEALTHY (check took {hcsDuration})");
-
-                                            if (healthCheckCounter == 30)
-                                            {
-                                                var t = healthCheckConnection.BeginTransaction(IsolationLevel
-                                                    .ReadCommitted);
-                                                Console.WriteLine("Performing cleanup of staging tables ...");
-                                                healthCheckConnection.Execute(cleanupSql, null, t, 20);
-                                                Console.WriteLine("Cleaned the staging tables.");
-                                                t.Commit();
-                                            }
                                         }
                                     }
                                     catch (Exception ex)
@@ -503,11 +515,6 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                                         Console.WriteLine(ex.StackTrace);
                                         healthCheckError = ex;
                                         throw;
-                                    }
-                                    
-                                    if (healthCheckCounter >= 30)
-                                    {
-                                        healthCheckCounter = 0;
                                     }
                                 });
                             }
@@ -524,7 +531,7 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
                             var waitForCommitAfterNthRound = 7;
                             if (committingUntilRounds >= waitForCommitAfterNthRound && commitTask != null)
                             {
-                                var timeoutIn = TimeSpan.FromSeconds(45);
+                                var timeoutIn = TimeSpan.FromSeconds(5);
                                 var timeout = DateTime.Now + timeoutIn;
                                 Console.WriteLine($".. Backpressure because the commit didn't finish within " +
                                                   $"{batchInterval * waitForCommitAfterNthRound} seconds " +
@@ -677,7 +684,7 @@ create index ix_transaction_staging_hash on _transaction_staging(hash) include (
 
                     try
                     {
-                        importConnection.Execute("call import_from_staging_2();", null, transaction, 45);
+                        importConnection.Execute("call import_from_staging_2();", null, transaction, 30);
                         transaction.Commit();
                         Console.WriteLine($"COMITTED");
                     }
