@@ -12,22 +12,22 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         {
             var lastKnownBlock = connection.QuerySingleOrDefault<long?>(
                 @"with a as (
-                                select distinct block_no
-                                from requested_blocks
-                                order by block_no
-                            ), b as (
-                                select distinct number
-                                from block
-                                order by number
-                            ), c as (
-                                select a.block_no as requested, b.number as actual
-                                from a
-                                left join b on a.block_no = b.number
-                                order by a.block_no
-                            )
-                            select min(c.requested) - 1 as last_correctly_imported_block
-                            from c
-                            where actual is null;") ?? 12529458L;
+                        select distinct block_no
+                        from requested_blocks
+                        order by block_no
+                    ), b as (
+                        select distinct number
+                        from block
+                        order by number
+                    ), c as (
+                        select a.block_no as requested, b.number as actual
+                        from a
+                                 left join b on a.block_no = b.number
+                        order by a.block_no
+                    )
+                    select coalesce(min(c.requested), (select max(number) from block)) - 1 as last_correctly_imported_block
+                    from c
+                    where actual is null;") ?? 12529458L;
 
             return lastKnownBlock;
         }
