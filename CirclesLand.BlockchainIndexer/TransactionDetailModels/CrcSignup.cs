@@ -4,5 +4,7 @@ namespace CirclesLand.BlockchainIndexer.TransactionDetailModels
     {
         public string? User { get; set; }
         public string? Token { get; set; }
+
+        public string[] Owners { get; set; }
     }
 }

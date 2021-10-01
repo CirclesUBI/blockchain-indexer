@@ -1,9 +1,9 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using CirclesLand.BlockchainIndexer.ABIs;
 using CirclesLand.BlockchainIndexer.DetailExtractors;
-using CirclesLand.BlockchainIndexer.TransactionDetailModels;
-using Nethereum.ABI.FunctionEncoding;
-using Nethereum.ABI.Model;
 using Nethereum.Web3;
 using NUnit.Framework;
 
@@ -100,6 +100,21 @@ namespace CirclesLand.BlockchainIndexer.Tests
                 out var value);
             
             Assert.IsTrue(isSafeEthTransfer);
+        }
+
+
+        [Test]
+        public async Task GetSafeOwners()
+        {
+            var contract = _web3.Eth.GetContract(GnosisSafeABI.Json, 
+                "0xDE374ece6fA50e781E81Aac78e811b33D16912c7");
+            var function = contract.GetFunction("getOwners");
+            var owners = await function.CallAsync<List<string>>();
+            
+            foreach (var owner in owners)
+            {
+              Console.WriteLine(owner);
+            }
         }
     }
 }

@@ -191,6 +191,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                                         ,block_number
                                         ,""user""
                                         ,token
+                                        ,owners
                                     ) FROM STDIN (FORMAT BINARY)");
 
             var rowCount = 0;
@@ -207,6 +208,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 writer.Write((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
                 writer.Write(((CrcSignup) d.detail).User, NpgsqlDbType.Text);
                 writer.Write(((CrcSignup) d.detail).Token, NpgsqlDbType.Text);
+                writer.Write(((CrcSignup) d.detail).Owners, NpgsqlDbType.Array | NpgsqlDbType.Text);
 
                 rowCount++;
             }

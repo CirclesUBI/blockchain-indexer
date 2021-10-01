@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -6,8 +7,10 @@ using Akka;
 using Akka.Actor;
 using Akka.Streams;
 using Akka.Streams.Dsl;
+using CirclesLand.BlockchainIndexer.ABIs;
 using CirclesLand.BlockchainIndexer.DetailExtractors;
 using CirclesLand.BlockchainIndexer.Persistence;
+using CirclesLand.BlockchainIndexer.TransactionDetailModels;
 using CirclesLand.BlockchainIndexer.Util;
 using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
 using Nethereum.Hex.HexTypes;
@@ -171,7 +174,7 @@ namespace CirclesLand.BlockchainIndexer
                         })
 
                         // Add the details for each transaction
-                        .Select(classifiedTransactions =>
+                        .SelectAsync(2, async classifiedTransactions =>
                         {
                             var extractedDetails = TransactionDetailExtractor.Extract(
                                     classifiedTransactions.Classification,
@@ -179,6 +182,20 @@ namespace CirclesLand.BlockchainIndexer
                                     classifiedTransactions.Receipt)
                                 .ToArray();
 
+                            // For every CrcSignup-event check who the owner is
+                            var signups = extractedDetails
+                                .Where(o => o is CrcSignup)
+                                .Cast<CrcSignup>();
+                            
+                            foreach (var signup in signups)
+                            {
+                                var contract = roundContext.Web3.Eth.GetContract(
+                                    GnosisSafeABI.Json, signup.User);
+                                var function = contract.GetFunction("getOwners");
+                                var owners = await function.CallAsync<List<string>>();
+                                signup.Owners = owners.ToArray();
+                            }
+                            
                             return (
                                 TotalTransactionsInBlock: classifiedTransactions.TotalTransactionsInBlock,
                                 TxHash: classifiedTransactions.Transaction.TransactionHash,
@@ -195,6 +212,7 @@ namespace CirclesLand.BlockchainIndexer
                         .RunForeach(transactionsWithExtractedDetails =>
                         {
                             roundContext.Log($" Writing batch to staging tables ..");
+                            
                             TransactionsWriter.WriteTransactions(
                                 roundContext.Connection,
                                 transactionsWithExtractedDetails);
