@@ -36,9 +36,7 @@ namespace CirclesLand.BlockchainIndexer
     {
         public event EventHandler<IndexedBlockEventArgs> NewBlock;
 
-
         public IndexerMode Mode { get; private set; } = IndexerMode.NotRunning;
-
 
         public async Task Run()
         {
@@ -80,6 +78,9 @@ namespace CirclesLand.BlockchainIndexer
                     var delta = currentBlock.Value - lastPersistedBlock;
                     Source<HexBigInteger, NotUsed> source;
 
+
+                    int flushEveryNthRound;
+                    
                     if (delta > Settings.UseBulkSourceThreshold)
                     {
                         roundContext.Log($"Found {delta} blocks to catch up. Using the 'BulkSource'.");
@@ -88,6 +89,8 @@ namespace CirclesLand.BlockchainIndexer
                         source = roundContext.SourceFactory.CreateBulkSource(
                             new HexBigInteger(lastPersistedBlock)
                             , currentBlock);
+                        
+                        flushEveryNthRound = Settings.BulkFlushInterval;
                     }
                     else
                     {
@@ -95,9 +98,8 @@ namespace CirclesLand.BlockchainIndexer
                         Mode = IndexerMode.Polling;
 
                         source = roundContext.SourceFactory.CreatePollingSource();
+                        flushEveryNthRound = Settings.SerialFlushInterval;
                     }
-
-                    int flushEveryNthRound = 10;
 
                     await source
                         .Select(o =>

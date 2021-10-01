@@ -869,6 +869,13 @@ create table requested_blocks (
 );
 create unique index ux_requested_blocks_block_no on requested_blocks(block_no);
 
+create table crc_safe_owners (
+    safe_address text,
+    owner text
+);
+create index ix_crc_safe_owners_safe_address on crc_safe_owners(safe_address) include (owner);
+create index ix_crc_safe_owners_owner on crc_safe_owners(owner) include (safe_address);
+
 /*
 -- Delete duplicates:
 alter table requested_blocks add column pk serial;
