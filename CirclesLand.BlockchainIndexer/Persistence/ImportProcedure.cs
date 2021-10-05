@@ -7,13 +7,13 @@ namespace CirclesLand.BlockchainIndexer.Persistence
 {
     public class ImportProcedure
     {
-        public static void ImportFromStaging(NpgsqlConnection connection)
+        public static void ImportFromStaging(NpgsqlConnection connection, int timeout)
         {
-            using var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted);
+            using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
 
             try
             {
-                connection.Execute("call import_from_staging_2();", null, transaction, 120);
+                connection.Execute("call import_from_staging_2();", null, transaction, timeout);
                 transaction.Commit();
             }
             catch (Exception ex)

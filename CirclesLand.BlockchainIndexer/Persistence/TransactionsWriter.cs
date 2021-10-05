@@ -106,43 +106,6 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                     o.detail is GnosisSafeEthTransfer);
 
             StagingTables.WriteSafeEthTransfers(writerConnection, gnosisSafeEthTransferTableName, safeEthTransfers);
-            
-            /*
-            var elapsedTime = DateTime.Now - startedAt;
-            var defaultColor = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine(
-                $"Downloaded {totalBlocksDownloaded} blocks @ {totalBlocksDownloaded / elapsedTime.TotalSeconds} " +
-                $"blocks per second.");
-            Console.WriteLine(
-                $"Processed {totalProcessedTransactions} 'transactions' @ {totalProcessedTransactions / elapsedTime.TotalSeconds} "
-                +
-                $"transactions per second.");
-            Console.WriteLine(
-                $"Processed {totalProcessedHubTransfers} 'hub transfers' @ {totalProcessedHubTransfers / elapsedTime.TotalSeconds} "
-                +
-                $"transactions per second.");
-            Console.WriteLine(
-                $"Processed {totalProcessedOrgansationSignups} 'organisation signups' @ {totalProcessedOrgansationSignups / elapsedTime.TotalSeconds} " +
-                $"transactions per second.");
-            Console.WriteLine(
-                $"Processed {totalProcessedSignups} 'signups' @ {totalProcessedSignups / elapsedTime.TotalSeconds} " +
-                $"transactions per second.");
-            Console.WriteLine(
-                $"Processed {totalProcessedTrusts} 'trusts' @ {totalProcessedTrusts / elapsedTime.TotalSeconds} " +
-                $"transactions per second.");
-            Console.WriteLine(
-                $"Processed {totalProcessedErc20Transfers} 'erc 20 transfers' @ {totalProcessedErc20Transfers / elapsedTime.TotalSeconds} " +
-                $"transactions per second.");
-            Console.WriteLine(
-                $"Processed {totalProcessedEthTransfers} 'eth transfers' @ {totalProcessedEthTransfers / elapsedTime.TotalSeconds} "
-                +
-                $"transactions per second.");
-            Console.WriteLine(
-                $"Processed {totalProcessedSafeEthTransfers} 'safe eth transfers' @ {totalProcessedSafeEthTransfers / elapsedTime.TotalSeconds} " +
-                $"transactions per second.");
-            Console.ForegroundColor = defaultColor;
-            */
         }
     }
 }

@@ -1,9 +1,12 @@
 using System;
+using System.Net.Http.Json;
 using System.Threading;
+using CirclesLand.BlockchainIndexer.Api;
 using CirclesLand.BlockchainIndexer.Persistence;
 using CirclesLand.BlockchainIndexer.Sources;
 using CirclesLand.BlockchainIndexer.Util;
 using Nethereum.Web3;
+using Newtonsoft.Json;
 using Npgsql;
 
 namespace CirclesLand.BlockchainIndexer
@@ -64,6 +67,16 @@ namespace CirclesLand.BlockchainIndexer
             BatchSuccess?.Invoke(this, EventArgs.Empty);
             Interlocked.Increment(ref Statistics.TotalProcessedBatches);
             Statistics.Print();
+
+            //WebsocketService.BroadcastMessage(transactionsJson);
+        }
+
+        public void OnBatchSuccessNotify(string[] writtenTransactions)
+        {
+            OnBatchSuccess();
+            
+            Console.WriteLine($"Imported {writtenTransactions.Length} transactions");
+            WebsocketService.BroadcastMessage(JsonConvert.SerializeObject(writtenTransactions));
         }
 
         public void Dispose()

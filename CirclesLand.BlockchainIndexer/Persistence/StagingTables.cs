@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
 using Dapper;
 using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
@@ -27,7 +28,10 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                         ");
         }
 
-        public static void CleanImported(NpgsqlConnection connection)
+        /// <summary>
+        /// Cleans all imported entries from the staging table and returns all hashes of the imported transactions.
+        /// </summary>
+        public static string[] CleanImported(NpgsqlConnection connection)
         {
             var cleanupSql = @"
                 delete from _gnosis_safe_eth_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
@@ -37,13 +41,15 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 delete from _crc_signup_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
                 delete from _crc_organisation_signup_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
                 delete from _crc_hub_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-                delete from _transaction_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
+                delete from _transaction_staging where block_number in (select distinct number from _block_staging where imported_at is not null) returning hash;
                 delete from _block_staging where imported_at is not null;";
 
             var t = connection.BeginTransaction(IsolationLevel.ReadCommitted);
             
-            connection.Execute(cleanupSql, null, t, 20);
+            var newTransactions = connection.Query(cleanupSql, null, t, true, 20);
             t.Commit();
+
+            return newTransactions.Select(o => (string)o.hash).ToArray();
         }
         public static int WriteSafeEthTransfers(NpgsqlConnection writerConnection,
             string? safeEthTransferTableName,

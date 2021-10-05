@@ -212,21 +212,33 @@ namespace CirclesLand.BlockchainIndexer
                         .RunForeach(transactionsWithExtractedDetails =>
                         {
                             roundContext.Log($" Writing batch to staging tables ..");
+
+                            var txArr = transactionsWithExtractedDetails.ToArray();
                             
                             TransactionsWriter.WriteTransactions(
                                 roundContext.Connection,
-                                transactionsWithExtractedDetails);
+                                txArr);
 
+                            string[] writtenTransactions = { };
                             if (Statistics.TotalProcessedBatches % flushEveryNthRound == 0)
                             {
                                 roundContext.Log($" Importing from staging tables ..");
-                                ImportProcedure.ImportFromStaging(roundContext.Connection);
+                                ImportProcedure.ImportFromStaging(roundContext.Connection
+                                    , Mode == IndexerMode.CatchUp ? 120 : 10);
                             
                                 roundContext.Log($" Cleaning staging tables ..");
-                                StagingTables.CleanImported(roundContext.Connection);
+                                writtenTransactions = StagingTables.CleanImported(roundContext.Connection);
                             }
 
-                            roundContext.OnBatchSuccess();
+                            if ((Mode == IndexerMode.Polling || Mode == IndexerMode.Live)
+                                && writtenTransactions.Length > 0)
+                            {
+                                roundContext.OnBatchSuccessNotify(writtenTransactions);   
+                            }
+                            else
+                            {
+                                roundContext.OnBatchSuccess();
+                            }
                         }, materializer);
 
                     Logger.Log($"Completed the stream. Restarting ..");
