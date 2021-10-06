@@ -110,7 +110,7 @@ begin
     perform pg_notify(topic, message::text);
 end
 $yolo$
-    language plpgsql;
+language plpgsql;
 
 create or replace function next_event_id()
 returns bigint

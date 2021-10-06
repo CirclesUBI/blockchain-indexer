@@ -1177,3 +1177,14 @@ begin
  
 end;
 $$;
+
+
+
+create or replace procedure publish_event(topic text, message text)
+as
+$yolo$
+begin
+    perform pg_notify(topic, message::text);
+end
+$yolo$
+    language plpgsql;
