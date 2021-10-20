@@ -196,6 +196,19 @@ namespace CirclesLand.BlockchainIndexer
                                 signup.Owners = owners.ToArray();
                             }
                             
+                            var organisationSignups = extractedDetails
+                                .Where(o => o is CrcOrganisationSignup)
+                                .Cast<CrcOrganisationSignup>();
+                            
+                            foreach (var organisationSignup in organisationSignups)
+                            {
+                                var contract = roundContext.Web3.Eth.GetContract(
+                                    GnosisSafeABI.Json, organisationSignup.Organization);
+                                var function = contract.GetFunction("getOwners");
+                                var owners = await function.CallAsync<List<string>>();
+                                organisationSignup.Owners = owners.ToArray();
+                            }
+                            
                             return (
                                 TotalTransactionsInBlock: classifiedTransactions.TotalTransactionsInBlock,
                                 TxHash: classifiedTransactions.Transaction.TransactionHash,

@@ -871,7 +871,9 @@ create unique index ux_requested_blocks_block_no on requested_blocks(block_no);
 
 
 alter table crc_signup_2 add column owners text[];
+alter table crc_organisation_signup_2 add column owners text[];
 alter table _crc_signup_staging add column owners text[];
+alter table _crc_organisation_signup_staging add column owners text[];
 
 update crc_safe_owners set "owner" = lower("owner"); 
 
@@ -1072,6 +1074,7 @@ begin
                   , ts2.timestamp
                   , ts2.block_number
                   , ts2.organisation
+                  , ts2.owners
     from _block_staging sb
              join _crc_organisation_signup_staging ts2 on sb.number = ts2.block_number
         and sb.selected_at = selected_at_ts
