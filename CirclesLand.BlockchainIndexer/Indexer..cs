@@ -193,7 +193,7 @@ namespace CirclesLand.BlockchainIndexer
                                     GnosisSafeABI.Json, signup.User);
                                 var function = contract.GetFunction("getOwners");
                                 var owners = await function.CallAsync<List<string>>();
-                                signup.Owners = owners.ToArray();
+                                signup.Owners = owners.Select(o => o.ToLower()).ToArray();
                             }
                             
                             var organisationSignups = extractedDetails
@@ -206,7 +206,7 @@ namespace CirclesLand.BlockchainIndexer
                                     GnosisSafeABI.Json, organisationSignup.Organization);
                                 var function = contract.GetFunction("getOwners");
                                 var owners = await function.CallAsync<List<string>>();
-                                organisationSignup.Owners = owners.ToArray();
+                                organisationSignup.Owners = owners.Select(o => o.ToLower()).ToArray();
                             }
                             
                             return (

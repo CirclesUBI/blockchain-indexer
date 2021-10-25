@@ -871,9 +871,14 @@ create unique index ux_requested_blocks_block_no on requested_blocks(block_no);
 
 
 alter table crc_signup_2 add column owners text[];
+create index ix_gin_crc_signup_2_owners on crc_signup_2 using GIN (owners);
+
 alter table crc_organisation_signup_2 add column owners text[];
+create index ix_gin_crc_organisation_signup_2_owners on crc_organisation_signup_2 using GIN (owners);
+
 alter table _crc_signup_staging add column owners text[];
 alter table _crc_organisation_signup_staging add column owners text[];
+
 
 update crc_safe_owners set "owner" = lower("owner"); 
 

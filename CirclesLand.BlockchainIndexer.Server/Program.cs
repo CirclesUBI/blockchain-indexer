@@ -1,16 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading.Tasks;
-using CirclesLand.BlockchainIndexer.Api;
-using CirclesLand.BlockchainIndexer.Util;
-using Dapper;
 using KestrelWebSocketServer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Npgsql;
 using DotNetHost = Microsoft.Extensions.Hosting.Host;
 
@@ -83,57 +77,6 @@ namespace CirclesLand.BlockchainIndexer.Server
                 })
                 .Build()
                 .Run();
-            
-            /*
-            indexer.NewBlock += (s, e) =>
-            {
-                Task.Run(() =>
-                {
-                    try
-                    {
-                        using var connection = new NpgsqlConnection(connectionString);
-                        connection.Open();
-
-                        var safes = connection.Query(
-                            @"select timestamp 
-                                  , block_number::text
-                                  , transaction_index
-                                  , transaction_hash
-                                  , type
-                                  , safe_address
-                                  , direction
-                                  , value::text
-                                  , obj::text as payload
-                                 from crc_safe_timeline 
-                                 where block_number = @block_number",
-                            new
-                            {
-                                block_number = (long) e.Block.Value
-                            });
-
-                        var changes = safes.Select(o =>
-                        {
-                            o.payload = JObject.Parse(o.payload);
-                            return o;
-                        }).ToArray();
-
-                        if (changes.Length == 0)
-                        {
-                            return;
-                        };
-                        
-                        var msg = JsonConvert.SerializeObject(changes);
-                        Logger.Log(msg);
-                        WebsocketService.BroadcastMessage(msg);
-                    }
-                    catch (Exception e)
-                    {
-                        Logger.LogError(e.Message);
-                        Logger.LogError(e.StackTrace);
-                    }
-                });
-            };
-            */
         }
     }
 }
