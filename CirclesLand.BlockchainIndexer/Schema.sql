@@ -879,16 +879,6 @@ create index ix_gin_crc_organisation_signup_2_owners on crc_organisation_signup_
 alter table _crc_signup_staging add column owners text[];
 alter table _crc_organisation_signup_staging add column owners text[];
 
-
-update crc_safe_owners set "owner" = lower("owner"); 
-
-create table crc_safe_owners (
-    safe_address text,
-    owner text
-);
-create index ix_crc_safe_owners_safe_address on crc_safe_owners(safe_address) include (owner);
-create index ix_crc_safe_owners_owner on crc_safe_owners(owner) include (safe_address);
-
 /*
 -- Delete duplicates:
 alter table requested_blocks add column pk serial;
