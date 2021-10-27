@@ -50,14 +50,6 @@ create unique index idx_crc_signup_user on crc_signup("user") include (transacti
 create unique index idx_crc_signup_token on crc_signup(token) include (transaction_id, "user");
 create index idx_crc_signup_fk_transaction_id on crc_signup (transaction_id);
 
-create view crc_signups_per_day
-as
-select b.timestamp::date, count(*) as signups
-from crc_signup_2 s
-         join transaction_2 t on s.hash = t.hash
-         join block b on t.block_number = b.number
-group by b.timestamp::date;
-
 create table crc_hub_transfer (
                                   id bigserial primary key,
                                   transaction_id bigint not null references transaction (id),
@@ -69,14 +61,6 @@ create table crc_hub_transfer (
 create index idx_crc_hub_transfer_from on crc_hub_transfer("from") include (transaction_id);
 create index idx_crc_hub_transfer_to on crc_hub_transfer("to") include (transaction_id);
 create index idx_crc_hub_transfer_fk_transaction_id on crc_hub_transfer(transaction_id);
-
-create view crc_hub_transfers_per_day
-as
-select b.timestamp::date, count(*) as transfers
-from crc_hub_transfer_2 s
-         join transaction_2 t on s.hash = t.hash
-         join block b on t.block_number = b.number
-group by b.timestamp::date;
 
 create table erc20_transfer (
                                 id bigserial primary key,
@@ -97,16 +81,6 @@ as
 select t.*
 from erc20_transfer t
          join crc_signup s on t.token = s.token;
-
-
-create view crc_alive_accounts
-as
-select tt."to"
-from crc_token_transfer_2 tt
-         join transaction_2 t on tt.hash = t.hash
-         join block b on t.block_number = b.number
-group by tt."to"
-having max(b.timestamp) > now() - interval '90 days';
 
 create view erc20_minting
 as
@@ -164,12 +138,6 @@ select safe_address, token, token_owner, sum(value) balance
 from crc_ledger
 group by safe_address, token, token_owner
 order by safe_address, balance desc;
-
-create view crc_total_minted_amount
-as
-select sum(value) total_crc_amount
-from crc_token_transfer_2
-where "from" = '0x0000000000000000000000000000000000000000';
 
 create table crc_trust (
                            id bigserial primary key,
@@ -1161,6 +1129,37 @@ begin
 end
 $yolo$
     language plpgsql;
+
+create view crc_alive_accounts
+as
+select tt."to"
+from crc_token_transfer_2 tt
+         join transaction_2 t on tt.hash = t.hash
+         join block b on t.block_number = b.number
+group by tt."to"
+having max(b.timestamp) > now() - interval '90 days';
+
+create view crc_hub_transfers_per_day
+as
+select b.timestamp::date, count(*) as transfers
+from crc_hub_transfer_2 s
+         join transaction_2 t on s.hash = t.hash
+         join block b on t.block_number = b.number
+group by b.timestamp::date;
+
+create view crc_signups_per_day
+as
+select b.timestamp::date, count(*) as signups
+from crc_signup_2 s
+         join transaction_2 t on s.hash = t.hash
+         join block b on t.block_number = b.number
+group by b.timestamp::date;
+
+create view crc_total_minted_amount
+as
+select sum(value) total_crc_amount
+from crc_token_transfer_2
+where "from" = '0x0000000000000000000000000000000000000000';
 
 drop view crc_balances_by_safe;
 drop view crc_balances_by_safe_and_token;
