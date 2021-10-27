@@ -67,3 +67,4 @@ When the bulk-source is active this procedure is only called from time to time. 
 * Initially puts heavy load on the rpc-gateway because it downloads all blocks with 24 parallel connections and receipts with 96 parallel connections (should be replaced with direct ingest from a geth/netermind/etc. db)
 * Not configurable yet. Settings are baked into [Settings.cs](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/Settings.cs) and the software needs to be recompiled 
 * Doesn't validate blocks
+* Uses a lot of threadpool threads and waits for some of them somewhere. This can cause thread pool starvation during the bulk import. 4 cores are adviced during this phase.
