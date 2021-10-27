@@ -53,8 +53,8 @@ create index idx_crc_signup_fk_transaction_id on crc_signup (transaction_id);
 create view crc_signups_per_day
 as
 select b.timestamp::date, count(*) as signups
-from crc_signup s
-         join transaction t on s.transaction_id = t.id
+from crc_signup_2 s
+         join transaction_2 t on s.hash = t.hash
          join block b on t.block_number = b.number
 group by b.timestamp::date;
 
@@ -73,8 +73,8 @@ create index idx_crc_hub_transfer_fk_transaction_id on crc_hub_transfer(transact
 create view crc_hub_transfers_per_day
 as
 select b.timestamp::date, count(*) as transfers
-from crc_hub_transfer s
-         join transaction t on s.transaction_id = t.id
+from crc_hub_transfer_2 s
+         join transaction_2 t on s.hash = t.hash
          join block b on t.block_number = b.number
 group by b.timestamp::date;
 
@@ -102,8 +102,8 @@ from erc20_transfer t
 create view crc_alive_accounts
 as
 select tt."to"
-from crc_token_transfer tt
-         join transaction t on tt.transaction_id = t.id
+from crc_token_transfer_2 tt
+         join transaction_2 t on tt.hash = t.hash
          join block b on t.block_number = b.number
 group by tt."to"
 having max(b.timestamp) > now() - interval '90 days';
@@ -168,7 +168,7 @@ order by safe_address, balance desc;
 create view crc_total_minted_amount
 as
 select sum(value) total_crc_amount
-from crc_token_transfer
+from crc_token_transfer_2
 where "from" = '0x0000000000000000000000000000000000000000';
 
 create table crc_trust (
@@ -1161,3 +1161,19 @@ begin
 end
 $yolo$
     language plpgsql;
+
+drop view crc_balances_by_safe;
+drop view crc_balances_by_safe_and_token;
+drop view crc_current_trust;
+drop view crc_ledger;
+drop view crc_safe_timeline;
+drop view crc_minting;
+drop view crc_token_transfer;
+drop view erc20_minting;
+
+drop table crc_hub_transfer;
+drop table crc_signup;
+drop table crc_organisation_signup;
+drop table crc_trust;
+drop table eth_transfer;
+drop table erc20_transfer;
