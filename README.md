@@ -63,6 +63,24 @@ All (bulk)insert statements can be found in the [StagingTables.cs](https://githu
 The actual import from the staging tables into the indexed main-schema is done by the [import_from_staging()](https://github.com/circlesland/blockchain-indexer/blob/0aba70b57e5702292b684a1603258bdf0fd64747/CirclesLand.BlockchainIndexer/Schema.sql#L956) stored procedure.  
 When the bulk-source is active this procedure is only called from time to time. When the InvervalSource is active it is called after every new block.
 
+## Availability, Reliability, Consistency and Health checks
+**Availability, Reliability**  
+It is possible to run multiple instances of the blockchain-indexer simultaneously (e.g. with different rpc-gateways). If both instances are healthy they will both write the same data to the staging tables. However only one instance can call [import_from_staging()](https://github.com/circlesland/blockchain-indexer/blob/0aba70b57e5702292b684a1603258bdf0fd64747/CirclesLand.BlockchainIndexer/Schema.sql#L956) at the same time. This is achieved by using a [Serializable](https://www.postgresql.org/docs/9.5/transaction-iso.html#XACT-SERIALIZABLE) database transaction. If two processes call the procedure at the same time then one of them will fail and in consequence restart its processing loop.
+
+If a process expieriences an error it logs it and then restart it's [processing loop](https://github.com/circlesland/blockchain-indexer/blob/14a368a2eb03b8aad2f94f7196951fc27eab4172/CirclesLand.BlockchainIndexer/Indexer..cs#L50). A increasing dynamic back-off time [is applied](https://github.com/circlesland/blockchain-indexer/blob/14a368a2eb03b8aad2f94f7196951fc27eab4172/CirclesLand.BlockchainIndexer/Indexer..cs#L60) after each error. The max waiting time is limited to [2 minutes](https://github.com/circlesland/blockchain-indexer/blob/14a368a2eb03b8aad2f94f7196951fc27eab4172/CirclesLand.BlockchainIndexer/Settings.cs#L13). 
+
+**Consistency**  
+The [import_from_staging()](https://github.com/circlesland/blockchain-indexer/blob/0aba70b57e5702292b684a1603258bdf0fd64747/CirclesLand.BlockchainIndexer/Schema.sql#L956) procedure works in three steps and two stages:
+1) Mark rows in staging tables:
+1.1) All rows that form a complete block (number of distinct transactions equals the block's total_transaction_count).
+1.2) All rows that already exist in the indexed tables.
+2) Import all marked rows (only in subsequent calls)
+3) Delete all rows from the staging table that are marked with "already existing"  
+Everything is matched by it's hash but the contents are not validated.
+
+**Health checks**   
+There is no built in mechanism for health checks but it should be easy to listen to the transaction hashes and define a timeout and alert after N-seconds without new transactions.
+
 ## Known issues
 * Initially puts heavy load on the rpc-gateway because it downloads all blocks with 24 parallel connections and receipts with 96 parallel connections (should be replaced with direct ingest from a geth/netermind/etc. db)
 * Not configurable yet. Settings are baked into [Settings.cs](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/Settings.cs) and the software needs to be recompiled 
