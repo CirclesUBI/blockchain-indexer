@@ -69,6 +69,10 @@ It is possible to run multiple instances of the blockchain-indexer simultaneousl
 
 If a process expieriences an error it logs it and then restart it's [processing loop](https://github.com/circlesland/blockchain-indexer/blob/14a368a2eb03b8aad2f94f7196951fc27eab4172/CirclesLand.BlockchainIndexer/Indexer..cs#L50). A increasing dynamic back-off time [is applied](https://github.com/circlesland/blockchain-indexer/blob/14a368a2eb03b8aad2f94f7196951fc27eab4172/CirclesLand.BlockchainIndexer/Indexer..cs#L60) after each error. The max waiting time is limited to [2 minutes](https://github.com/circlesland/blockchain-indexer/blob/14a368a2eb03b8aad2f94f7196951fc27eab4172/CirclesLand.BlockchainIndexer/Settings.cs#L13). 
 
+Depending on the mode (bulk or live) the import_from_staging()-procedure is called with different timeouts:  
+* CatchUp: 120 sec.
+* all others: 10 sec.
+
 **Consistency**  
 The [import_from_staging()](https://github.com/circlesland/blockchain-indexer/blob/0aba70b57e5702292b684a1603258bdf0fd64747/CirclesLand.BlockchainIndexer/Schema.sql#L956) procedure works in three steps and two stages:
 1) Mark rows in staging tables:
