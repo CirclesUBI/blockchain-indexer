@@ -1,49 +1,49 @@
 create table block (
-    number bigserial primary key,
-    hash text not null unique ,
-    timestamp timestamp not null,
-    total_transaction_count int not null,
-    indexed_transaction_count int not null 
+                       number bigserial primary key,
+                       hash text not null unique ,
+                       timestamp timestamp not null,
+                       total_transaction_count int not null,
+                       indexed_transaction_count int not null
 );
 
 create unique index idx_block_timestamp on block(timestamp) include (number);
 
 create view first_incomplete_block as
-    select min(number) block_no from block
-    where total_transaction_count > indexed_transaction_count;
+select min(number) block_no from block
+where total_transaction_count > indexed_transaction_count;
 
 create table transaction (
-    id bigserial primary key,
-    block_number bigint not null references block(number),
-    "from" text not null,
-    "to" text null, -- Todo: NULL happens only on contract creation. Get the address of the deployed contact.
-    index int not null,
-    gas numeric not null,
-    hash text unique not null,
-    value numeric not null,
-    input text null,
-    nonce text null,
-    type text null,
-    gas_price numeric null,
-    classification text[] not null
+                             id bigserial primary key,
+                             block_number bigint not null references block(number),
+                             "from" text not null,
+                             "to" text null, -- Todo: NULL happens only on contract creation. Get the address of the deployed contact.
+                             index int not null,
+                             gas numeric not null,
+                             hash text unique not null,
+                             value numeric not null,
+                             input text null,
+                             nonce text null,
+                             type text null,
+                             gas_price numeric null,
+                             classification text[] not null
 );
 
 create index idx_transaction_fk_block_number on transaction(block_number) include (id);
 
 create table crc_organisation_signup (
-    id bigserial primary key,
-    transaction_id bigint not null references transaction (id),
-    organisation text not null
+                                         id bigserial primary key,
+                                         transaction_id bigint not null references transaction (id),
+                                         organisation text not null
 );
 
 create unique index idx_crc_organisation_signup_organisation on crc_organisation_signup(organisation) include (transaction_id);
 create index idx_crc_organisation_signup_fk_transaction_id on crc_organisation_signup(transaction_id);
 
 create table crc_signup (
-    id bigserial primary key,
-    transaction_id bigint not null references transaction (id),
-    "user" text unique not null unique,
-    token text not null unique 
+                            id bigserial primary key,
+                            transaction_id bigint not null references transaction (id),
+                            "user" text unique not null unique,
+                            token text not null unique
 );
 
 create unique index idx_crc_signup_user on crc_signup("user") include (transaction_id, token);
@@ -52,28 +52,19 @@ create index idx_crc_signup_fk_transaction_id on crc_signup (transaction_id);
 
 create view crc_signups_per_day
 as
-    select b.timestamp::date, count(*) as signups
-    from crc_signup s
-             join transaction t on s.transaction_id = t.id
-             join block b on t.block_number = b.number
-    group by b.timestamp::date;
+select b.timestamp::date, count(*) as signups
+from crc_signup s
+         join transaction t on s.transaction_id = t.id
+         join block b on t.block_number = b.number
+group by b.timestamp::date;
 
 create table crc_hub_transfer (
-    id bigserial primary key,
-    transaction_id bigint not null references transaction (id),
-    "from" text not null,
-    "to" text not null,
-    value numeric not null
+                                  id bigserial primary key,
+                                  transaction_id bigint not null references transaction (id),
+                                  "from" text not null,
+                                  "to" text not null,
+                                  value numeric not null
 );
-
-create view crc_alive_accounts
-as
-    select tt."to"
-    from crc_token_transfer tt
-             join transaction t on tt.transaction_id = t.id
-             join block b on t.block_number = b.number
-    group by tt."to"
-    having max(b.timestamp) > now() - interval '90 days';
 
 create index idx_crc_hub_transfer_from on crc_hub_transfer("from") include (transaction_id);
 create index idx_crc_hub_transfer_to on crc_hub_transfer("to") include (transaction_id);
@@ -81,19 +72,19 @@ create index idx_crc_hub_transfer_fk_transaction_id on crc_hub_transfer(transact
 
 create view crc_hub_transfers_per_day
 as
-    select b.timestamp::date, count(*) as transfers
-    from crc_hub_transfer s
-             join transaction t on s.transaction_id = t.id
-             join block b on t.block_number = b.number
-    group by b.timestamp::date;
+select b.timestamp::date, count(*) as transfers
+from crc_hub_transfer s
+         join transaction t on s.transaction_id = t.id
+         join block b on t.block_number = b.number
+group by b.timestamp::date;
 
 create table erc20_transfer (
-    id bigserial primary key,
-    transaction_id bigint not null references transaction (id),
-    "from" text not null,
-    "to" text not null,
-    token text not null,
-    value numeric not null
+                                id bigserial primary key,
+                                transaction_id bigint not null references transaction (id),
+                                "from" text not null,
+                                "to" text not null,
+                                token text not null,
+                                value numeric not null
 );
 
 create index idx_erc20_transfer_from on erc20_transfer("from") include (transaction_id);
@@ -103,21 +94,31 @@ create index idx_erc20_transfer_fk_transaction_id on erc20_transfer(transaction_
 
 create view crc_token_transfer
 as
-    select t.*
-    from erc20_transfer t
-             join crc_signup s on t.token = s.token;
+select t.*
+from erc20_transfer t
+         join crc_signup s on t.token = s.token;
 
-create view erc20_minting 
-as
-    select *
-    from erc20_transfer
-    where "from" = '0x0000000000000000000000000000000000000000';
 
-create view crc_minting 
+create view crc_alive_accounts
 as
-    select tm.*
-    from erc20_minting tm
-             join crc_signup s on tm.token = s.token;
+select tt."to"
+from crc_token_transfer tt
+         join transaction t on tt.transaction_id = t.id
+         join block b on t.block_number = b.number
+group by tt."to"
+having max(b.timestamp) > now() - interval '90 days';
+
+create view erc20_minting
+as
+select *
+from erc20_transfer
+where "from" = '0x0000000000000000000000000000000000000000';
+
+create view crc_minting
+as
+select tm.*
+from erc20_minting tm
+         join crc_signup s on tm.token = s.token;
 
 create view crc_ledger
 as
@@ -152,31 +153,31 @@ order by b.timestamp, t.index, l.token, l.verb desc /* TODO: The log index is go
 
 create view crc_balances_by_safe
 as
-    select safe_address, sum(value) balance
-    from crc_ledger
-    group by safe_address
-    order by safe_address;
+select safe_address, sum(value) balance
+from crc_ledger
+group by safe_address
+order by safe_address;
 
 create view crc_balances_by_safe_and_token
-    as
-    select safe_address, token, token_owner, sum(value) balance
-    from crc_ledger
-    group by safe_address, token, token_owner
-    order by safe_address, balance desc;
+as
+select safe_address, token, token_owner, sum(value) balance
+from crc_ledger
+group by safe_address, token, token_owner
+order by safe_address, balance desc;
 
 create view crc_total_minted_amount
 as
-    select sum(value) total_crc_amount
-    from crc_token_transfer
-    where "from" = '0x0000000000000000000000000000000000000000';
+select sum(value) total_crc_amount
+from crc_token_transfer
+where "from" = '0x0000000000000000000000000000000000000000';
 
 create table crc_trust (
-    id bigserial primary key,
-    transaction_id bigint not null references transaction (id),
-    address text not null,
-    can_send_to text not null,
-    "limit" numeric not null
-); 
+                           id bigserial primary key,
+                           transaction_id bigint not null references transaction (id),
+                           address text not null,
+                           can_send_to text not null,
+                           "limit" numeric not null
+);
 
 create index idx_crc_trust_address on crc_trust(address) include (transaction_id);
 create index idx_crc_trust_can_send_to on crc_trust(can_send_to) include (transaction_id);
@@ -184,32 +185,32 @@ create index idx_crc_trust_fk_transaction_id on crc_trust(transaction_id);
 
 create view crc_current_trust
 as
-    select lte.address as "user",
-           cs_a.id as user_id,
-           cs_a.token user_token,
-           lte.can_send_to,
-           cs_b.id can_send_to_id,
-           cs_b.token can_send_to_token,
-           ct."limit",
-           lte.history_count
-    from (
-             select max(transaction_id) transaction_id,
-                    count(transaction_id) history_count,
-                    address,
-                    can_send_to
-             from crc_trust
-             group by address,
-                      can_send_to) lte
-    join crc_trust ct on lte.transaction_id = ct.transaction_id
-    join crc_signup cs_a on lte.address = cs_a."user"
-    join crc_signup cs_b on lte.can_send_to = cs_b."user";
+select lte.address as "user",
+       cs_a.id as user_id,
+       cs_a.token user_token,
+       lte.can_send_to,
+       cs_b.id can_send_to_id,
+       cs_b.token can_send_to_token,
+       ct."limit",
+       lte.history_count
+from (
+         select max(transaction_id) transaction_id,
+                count(transaction_id) history_count,
+                address,
+                can_send_to
+         from crc_trust
+         group by address,
+                  can_send_to) lte
+         join crc_trust ct on lte.transaction_id = ct.transaction_id
+         join crc_signup cs_a on lte.address = cs_a."user"
+         join crc_signup cs_b on lte.can_send_to = cs_b."user";
 
 create table eth_transfer (
-    id bigserial primary key,
-    transaction_id bigint not null references transaction (id),
-    "from" text not null,
-    "to" text not null,
-    value numeric not null
+                              id bigserial primary key,
+                              transaction_id bigint not null references transaction (id),
+                              "from" text not null,
+                              "to" text not null,
+                              value numeric not null
 );
 
 create index idx_eth_transfer_from on eth_transfer("from") include (transaction_id);
@@ -217,12 +218,12 @@ create index idx_eth_transfer_to on eth_transfer("to") include (transaction_id);
 create index idx_eth_transfer_fk_transaction_id on eth_transfer(transaction_id);
 
 create table gnosis_safe_eth_transfer (
-    id bigserial primary key,
-    transaction_id bigint not null references transaction (id),
-    initiator text not null,
-    "from" text not null,
-    "to" text not null,
-    value numeric not null
+                                          id bigserial primary key,
+                                          transaction_id bigint not null references transaction (id),
+                                          initiator text not null,
+                                          "from" text not null,
+                                          "to" text not null,
+                                          value numeric not null
 );
 
 create index idx_gnosis_safe_eth_transfer_initiator on gnosis_safe_eth_transfer(initiator) include (transaction_id);
@@ -247,7 +248,7 @@ begin
     delete from block where number >= first_corrupt_block;
 end
 $yolo$
-language plpgsql;
+    language plpgsql;
 
 create view crc_safe_timeline
 as
@@ -440,7 +441,7 @@ select cs.block_number
      ,cs.classification
 into transaction_2
 from transaction cs
-join block b on cs.block_number = b.number;
+         join block b on cs.block_number = b.number;
 
 alter table transaction_2 add constraint pk_transaction_2 primary key (hash);
 create unique index ux_transaction_2_block_number_index on transaction_2(block_number, index);
@@ -452,8 +453,8 @@ create index ix_transaction_2_to on transaction_2("to") include ("from", value);
 select t.hash, t.index, t_2.timestamp, t.block_number, "user", token
 into crc_signup_2
 from crc_signup cs
-    join transaction t on cs.transaction_id = t.id
-    join transaction_2 t_2 on t_2.hash = t.hash;
+         join transaction t on cs.transaction_id = t.id
+         join transaction_2 t_2 on t_2.hash = t.hash;
 
 alter table crc_signup_2 add constraint fk_signup_transaction_2 foreign key(hash) references transaction_2(hash);
 alter table crc_signup_2 add constraint fk_signup_block_2 foreign key(block_number) references block(number);
@@ -496,8 +497,8 @@ create index ix_crc_trust_2_can_send_to on crc_trust_2(can_send_to) include (add
 select t.hash, t.index, t_2.timestamp, t.block_number, cs.from, cs.to, cs.value
 into crc_hub_transfer_2
 from crc_hub_transfer cs
-     join transaction t on cs.transaction_id = t.id
-     join transaction_2 t_2 on t_2.hash = t.hash;
+         join transaction t on cs.transaction_id = t.id
+         join transaction_2 t_2 on t_2.hash = t.hash;
 
 alter table crc_hub_transfer_2 add constraint fk_hub_transfer_transaction_2 foreign key(hash) references transaction_2(hash);
 alter table crc_hub_transfer_2 add constraint fk_hub_transfer_block_2 foreign key(block_number) references block(number);
@@ -511,8 +512,8 @@ create index ix_crc_hub_transfer_2_to on crc_hub_transfer_2("to") include ("from
 select t.hash, t.index, t_2.timestamp, t.block_number, cs.from, cs.to, cs.token, cs.value
 into erc20_transfer_2
 from erc20_transfer cs
-     join transaction t on cs.transaction_id = t.id
-     join transaction_2 t_2 on t_2.hash = t.hash;
+         join transaction t on cs.transaction_id = t.id
+         join transaction_2 t_2 on t_2.hash = t.hash;
 
 alter table erc20_transfer_2 add constraint fk_erc20_transfer_transaction_2 foreign key(hash) references transaction_2(hash);
 alter table erc20_transfer_2 add constraint fk_erc20_transfer_block_2 foreign key(block_number) references block(number);
@@ -528,8 +529,8 @@ create index ix_erc20_transfer_2_to on erc20_transfer_2("to") include ("from", t
 select t.hash, t.index, t_2.timestamp, t.block_number, cs.from, cs.to, cs.value
 into eth_transfer_2
 from eth_transfer cs
-     join transaction t on cs.transaction_id = t.id
-     join transaction_2 t_2 on t_2.hash = t.hash;
+         join transaction t on cs.transaction_id = t.id
+         join transaction_2 t_2 on t_2.hash = t.hash;
 
 alter table eth_transfer_2 add constraint fk_eth_transfer_transaction_2 foreign key(hash) references transaction_2(hash);
 alter table eth_transfer_2 add constraint fk_eth_transfer_block_2 foreign key(block_number) references block(number);
@@ -544,8 +545,8 @@ create index ix_eth_transfer_2_to on eth_transfer_2("to") include ("from", value
 select t.hash, t.index, t_2.timestamp, t.block_number, cs.initiator, cs.from, cs.to, cs.value
 into gnosis_safe_eth_transfer_2
 from gnosis_safe_eth_transfer cs
-     join transaction t on cs.transaction_id = t.id
-     join transaction_2 t_2 on t_2.hash = t.hash;
+         join transaction t on cs.transaction_id = t.id
+         join transaction_2 t_2 on t_2.hash = t.hash;
 
 alter table gnosis_safe_eth_transfer_2 add constraint fk_gnosis_safe_eth_transfer_transaction_2 foreign key(hash) references transaction_2(hash);
 alter table gnosis_safe_eth_transfer_2 add constraint fk_gnosis_safe_eth_transfer_block_2 foreign key(block_number) references block(number);
@@ -560,240 +561,240 @@ create index ix_gnosis_safe_eth_transfer_2_initiator on gnosis_safe_eth_transfer
 
 create view crc_ledger_2 (timestamp, transaction_id, verb, value, token, token_owner, predicate, safe_address)
 as
-    WITH ledger AS (
-        SELECT t_1.hash,
-               t_1.block_number,
-               t_1.timestamp,
-               'add'::text    AS verb,
-               sum(t_1.value) AS value,
-               t_1.token,
-               cs."user"      AS token_owner,
-               'to'::text     AS predicate,
-               t_1."to"       AS safe_address
-        FROM erc20_transfer_2 t_1
-                 JOIN crc_signup_2 cs ON t_1.token = cs.token
-        GROUP BY t_1.hash, t_1.block_number, t_1.timestamp, t_1."to", t_1.token, cs."user"
-        UNION
-        SELECT t_1.hash,
-               t_1.block_number,
-               t_1.timestamp,
-               'remove'::text   AS verb,
-               - sum(t_1.value) AS value,
-               t_1.token,
-               cs."user"        AS token_owner,
-               'from'::text     AS predicate,
-               t_1."from"       AS safe_address
-        FROM erc20_transfer_2 t_1
-                 JOIN crc_signup_2 cs ON t_1.token = cs.token
-        GROUP BY t_1.hash, t_1.block_number, t_1.timestamp, t_1."from", t_1.token, cs."user"
-    )
-    SELECT l."timestamp",
-           l.hash,
-           l.verb,
-           l.value,
-           l.token,
-           l.token_owner,
-           l.predicate,
-           l.safe_address
-    FROM ledger l
-    ORDER BY l."timestamp", l.token, l.verb DESC;
+WITH ledger AS (
+    SELECT t_1.hash,
+           t_1.block_number,
+           t_1.timestamp,
+           'add'::text    AS verb,
+           sum(t_1.value) AS value,
+           t_1.token,
+           cs."user"      AS token_owner,
+           'to'::text     AS predicate,
+           t_1."to"       AS safe_address
+    FROM erc20_transfer_2 t_1
+             JOIN crc_signup_2 cs ON t_1.token = cs.token
+    GROUP BY t_1.hash, t_1.block_number, t_1.timestamp, t_1."to", t_1.token, cs."user"
+    UNION
+    SELECT t_1.hash,
+           t_1.block_number,
+           t_1.timestamp,
+           'remove'::text   AS verb,
+           - sum(t_1.value) AS value,
+           t_1.token,
+           cs."user"        AS token_owner,
+           'from'::text     AS predicate,
+           t_1."from"       AS safe_address
+    FROM erc20_transfer_2 t_1
+             JOIN crc_signup_2 cs ON t_1.token = cs.token
+    GROUP BY t_1.hash, t_1.block_number, t_1.timestamp, t_1."from", t_1.token, cs."user"
+)
+SELECT l."timestamp",
+       l.hash,
+       l.verb,
+       l.value,
+       l.token,
+       l.token_owner,
+       l.predicate,
+       l.safe_address
+FROM ledger l
+ORDER BY l."timestamp", l.token, l.verb DESC;
 
 
-create view crc_balances_by_safe_2(safe_address, balance) 
+create view crc_balances_by_safe_2(safe_address, balance)
 as
-    SELECT crc_ledger_2.safe_address,
-           sum(crc_ledger_2.value) AS balance
-    FROM crc_ledger_2
-    GROUP BY crc_ledger_2.safe_address
-    ORDER BY crc_ledger_2.safe_address;
+SELECT crc_ledger_2.safe_address,
+       sum(crc_ledger_2.value) AS balance
+FROM crc_ledger_2
+GROUP BY crc_ledger_2.safe_address
+ORDER BY crc_ledger_2.safe_address;
 
 create view crc_balances_by_safe_and_token_2(safe_address, token, token_owner, balance)
 as
-    SELECT crc_ledger_2.safe_address,
-           crc_ledger_2.token,
-           crc_ledger_2.token_owner,
-           sum(crc_ledger_2.value) AS balance
-    FROM crc_ledger_2
-    GROUP BY crc_ledger_2.safe_address, crc_ledger_2.token, crc_ledger_2.token_owner
-    ORDER BY crc_ledger_2.safe_address, (sum(crc_ledger_2.value)) DESC;
+SELECT crc_ledger_2.safe_address,
+       crc_ledger_2.token,
+       crc_ledger_2.token_owner,
+       sum(crc_ledger_2.value) AS balance
+FROM crc_ledger_2
+GROUP BY crc_ledger_2.safe_address, crc_ledger_2.token, crc_ledger_2.token_owner
+ORDER BY crc_ledger_2.safe_address, (sum(crc_ledger_2.value)) DESC;
 
 create view crc_current_trust_2 ("user", user_token, can_send_to, can_send_to_token, "limit", history_count)
 as
-    SELECT lte.address AS "user",
-           cs_a.token  AS user_token,
-           lte.can_send_to,
-           cs_b.token  AS can_send_to_token,
-           ct."limit",
-           lte.history_count
-    FROM (SELECT max(crc_trust_2.hash)   AS hash,
-                 count(crc_trust_2.hash) AS history_count,
-                 crc_trust_2.address,
-                 crc_trust_2.can_send_to
-          FROM crc_trust_2
-          GROUP BY crc_trust_2.address, crc_trust_2.can_send_to) lte
-             JOIN crc_trust_2 ct ON lte.hash = ct.hash
-             JOIN crc_signup_2 cs_a ON lte.address = cs_a."user"
-             JOIN crc_signup_2 cs_b ON lte.can_send_to = cs_b."user";
+SELECT lte.address AS "user",
+       cs_a.token  AS user_token,
+       lte.can_send_to,
+       cs_b.token  AS can_send_to_token,
+       ct."limit",
+       lte.history_count
+FROM (SELECT max(crc_trust_2.hash)   AS hash,
+             count(crc_trust_2.hash) AS history_count,
+             crc_trust_2.address,
+             crc_trust_2.can_send_to
+      FROM crc_trust_2
+      GROUP BY crc_trust_2.address, crc_trust_2.can_send_to) lte
+         JOIN crc_trust_2 ct ON lte.hash = ct.hash
+         JOIN crc_signup_2 cs_a ON lte.address = cs_a."user"
+         JOIN crc_signup_2 cs_b ON lte.can_send_to = cs_b."user";
 
 create view erc20_minting_2(timestamp, block_number, index, hash, "from", "to", token, value)
 as
-    SELECT erc20_transfer_2.timestamp,
-           erc20_transfer_2.block_number,
-           erc20_transfer_2.index,
-           erc20_transfer_2.hash,
-           erc20_transfer_2."from",
-           erc20_transfer_2."to",
-           erc20_transfer_2.token,
-           erc20_transfer_2.value
-    FROM erc20_transfer_2
-    WHERE erc20_transfer_2."from" = '0x0000000000000000000000000000000000000000'::text;
+SELECT erc20_transfer_2.timestamp,
+       erc20_transfer_2.block_number,
+       erc20_transfer_2.index,
+       erc20_transfer_2.hash,
+       erc20_transfer_2."from",
+       erc20_transfer_2."to",
+       erc20_transfer_2.token,
+       erc20_transfer_2.value
+FROM erc20_transfer_2
+WHERE erc20_transfer_2."from" = '0x0000000000000000000000000000000000000000'::text;
 
 create view crc_minting_2(timestamp, block_number, index, hash, "from", "to", token, value)
 as
-    SELECT tm.timestamp,
-           tm.block_number,
-           tm.index,
-           tm.hash,
-           tm."from",
-           tm."to",
-           tm.token,
-           tm.value
-    FROM erc20_minting_2 tm
-    JOIN crc_signup_2 s ON tm.token = s.token;
+SELECT tm.timestamp,
+       tm.block_number,
+       tm.index,
+       tm.hash,
+       tm."from",
+       tm."to",
+       tm.token,
+       tm.value
+FROM erc20_minting_2 tm
+         JOIN crc_signup_2 s ON tm.token = s.token;
 
 create view crc_token_transfer_2(timestamp, block_number, index, hash, "from", "to", token, value)
 as
-    SELECT t.timestamp,
-           t.block_number,
-           t.index,
-           t.hash,
-           t."from",
-           t."to",
-           t.token,
-           t.value
-    FROM erc20_transfer_2 t
-             JOIN crc_signup_2 s ON t.token = s.token;
+SELECT t.timestamp,
+       t.block_number,
+       t.index,
+       t.hash,
+       t."from",
+       t."to",
+       t.token,
+       t.value
+FROM erc20_transfer_2 t
+         JOIN crc_signup_2 s ON t.token = s.token;
 
 create view crc_safe_timeline_2
             (timestamp, block_number, transaction_index, transaction_hash, type, safe_address,
              direction, value, obj)
 as
-    WITH safe_timeline AS (
-        SELECT cs."timestamp",
-               cs.block_number,
-               cs.index,
-               cs.hash,
-               'crc_signup'::text AS type,
-               cs."user",
-               'self'::text       AS direction,
-               0                  AS value,
-               row_to_json(cs.*)  AS obj
-        FROM crc_signup_2 cs
-        UNION ALL
-        SELECT cht."timestamp",
-               cht.block_number,
-               cht.index,
-               cht.hash,
-               'crc_hub_transfer'::text                  AS type,
-               crc_signup_2."user",
-               CASE
-                   WHEN cht."from" = crc_signup_2."user" AND cht."to" = crc_signup_2."user" THEN 'self'::text
-                   WHEN cht."from" = crc_signup_2."user" THEN 'out'::text
-                   ELSE 'in'::text
-                   END                                   AS direction,
-               cht.value,
-               (SELECT json_agg(_steps.*) AS row_to_json
-                FROM (SELECT t_1.hash                                  AS "transactionHash",
-                             t_1."from",
-                             t_1."to",
-                             t_1.value::text                            AS flow,
-                             (SELECT json_agg(steps.*) AS transfers
-                              FROM (SELECT e20t."from",
-                                           e20t."to",
-                                           e20t.token,
-                                           e20t.value::text AS value
-                                    FROM crc_token_transfer_2 e20t
-                                    WHERE e20t.hash = t_1.hash) steps) AS transfers
-                      FROM crc_hub_transfer_2 t_1
-                      WHERE t_1.hash = cht.hash) _steps) AS transitive_path
-        FROM crc_hub_transfer_2 cht
-                 JOIN crc_signup_2 ON crc_signup_2."user" = cht."from"
-            OR crc_signup_2."user" = cht."to"
-        UNION ALL
-        SELECT ct."timestamp",
-               ct.block_number,
-               ct.index,
-               ct.hash,
-               'crc_trust'::text AS type,
-               crc_signup_2."user",
-               CASE
-                   WHEN ct.can_send_to = crc_signup_2."user" AND ct.address = crc_signup_2."user" THEN 'self'::text
-                   WHEN ct.can_send_to = crc_signup_2."user" THEN 'out'::text
-                   ELSE 'in'::text
-                   END           AS direction,
-               ct."limit",
-               row_to_json(ct.*) AS obj
-        FROM crc_trust_2 ct
-                 JOIN crc_signup_2 ON crc_signup_2."user" = ct.address OR crc_signup_2."user" = ct.can_send_to
-        UNION ALL
-        SELECT ct."timestamp",
-               ct.block_number,
-               ct.index,
-               ct.hash,
-               'crc_minting'::text AS type,
-               crc_signup_2."user",
-               'in'::text          AS direction,
-               ct.value,
-               row_to_json(ct.*)   AS obj
-        FROM crc_minting_2 ct
-                 JOIN crc_signup_2 ON ct.token = crc_signup_2.token
-        UNION ALL
-        SELECT eth."timestamp",
-               eth.block_number,
-               eth.index,
-               eth.hash,
-               'eth_transfer'::text AS type,
-               crc_signup_2."user",
-               CASE
-                   WHEN eth."from" = crc_signup_2."user" AND eth."to" = crc_signup_2."user" THEN 'self'::text
-                   WHEN eth."from" = crc_signup_2."user" THEN 'out'::text
-                   ELSE 'in'::text
-                   END              AS direction,
-               eth.value,
-               row_to_json(eth.*)   AS obj
-        FROM eth_transfer_2 eth
-                 JOIN crc_signup_2 ON crc_signup_2."user" = eth."from" OR crc_signup_2."user" = eth."to"
-        UNION ALL
-        SELECT seth."timestamp",
-               seth.block_number,
-               seth.index,
-               seth.hash,
-               'gnosis_safe_eth_transfer'::text AS type,
-               crc_signup_2."user",
-               CASE
-                   WHEN seth."from" = crc_signup_2."user" AND seth."to" = crc_signup_2."user" THEN 'self'::text
-                   WHEN seth."from" = crc_signup_2."user" THEN 'out'::text
-                   ELSE 'in'::text
-                   END                          AS direction,
-               seth.value,
-               row_to_json(seth.*)              AS obj
-        FROM gnosis_safe_eth_transfer_2 seth
-                 JOIN crc_signup_2 ON crc_signup_2."user" = seth."from" OR crc_signup_2."user" = seth."to"
-    )
-    SELECT st."timestamp",
-           st.block_number,
-           st.index  AS transaction_index,
-           st.hash   AS transaction_hash,
-           st.type,
-           st."user" AS safe_address,
-           st.direction,
-           st.value,
-           st.obj
-    FROM safe_timeline st;
+WITH safe_timeline AS (
+    SELECT cs."timestamp",
+           cs.block_number,
+           cs.index,
+           cs.hash,
+           'crc_signup'::text AS type,
+           cs."user",
+           'self'::text       AS direction,
+           0                  AS value,
+           row_to_json(cs.*)  AS obj
+    FROM crc_signup_2 cs
+    UNION ALL
+    SELECT cht."timestamp",
+           cht.block_number,
+           cht.index,
+           cht.hash,
+           'crc_hub_transfer'::text                  AS type,
+           crc_signup_2."user",
+           CASE
+               WHEN cht."from" = crc_signup_2."user" AND cht."to" = crc_signup_2."user" THEN 'self'::text
+               WHEN cht."from" = crc_signup_2."user" THEN 'out'::text
+               ELSE 'in'::text
+               END                                   AS direction,
+           cht.value,
+           (SELECT json_agg(_steps.*) AS row_to_json
+            FROM (SELECT t_1.hash                                  AS "transactionHash",
+                         t_1."from",
+                         t_1."to",
+                         t_1.value::text                            AS flow,
+                         (SELECT json_agg(steps.*) AS transfers
+                          FROM (SELECT e20t."from",
+                                       e20t."to",
+                                       e20t.token,
+                                       e20t.value::text AS value
+                                FROM crc_token_transfer_2 e20t
+                                WHERE e20t.hash = t_1.hash) steps) AS transfers
+                  FROM crc_hub_transfer_2 t_1
+                  WHERE t_1.hash = cht.hash) _steps) AS transitive_path
+    FROM crc_hub_transfer_2 cht
+             JOIN crc_signup_2 ON crc_signup_2."user" = cht."from"
+        OR crc_signup_2."user" = cht."to"
+    UNION ALL
+    SELECT ct."timestamp",
+           ct.block_number,
+           ct.index,
+           ct.hash,
+           'crc_trust'::text AS type,
+           crc_signup_2."user",
+           CASE
+               WHEN ct.can_send_to = crc_signup_2."user" AND ct.address = crc_signup_2."user" THEN 'self'::text
+               WHEN ct.can_send_to = crc_signup_2."user" THEN 'out'::text
+               ELSE 'in'::text
+               END           AS direction,
+           ct."limit",
+           row_to_json(ct.*) AS obj
+    FROM crc_trust_2 ct
+             JOIN crc_signup_2 ON crc_signup_2."user" = ct.address OR crc_signup_2."user" = ct.can_send_to
+    UNION ALL
+    SELECT ct."timestamp",
+           ct.block_number,
+           ct.index,
+           ct.hash,
+           'crc_minting'::text AS type,
+           crc_signup_2."user",
+           'in'::text          AS direction,
+           ct.value,
+           row_to_json(ct.*)   AS obj
+    FROM crc_minting_2 ct
+             JOIN crc_signup_2 ON ct.token = crc_signup_2.token
+    UNION ALL
+    SELECT eth."timestamp",
+           eth.block_number,
+           eth.index,
+           eth.hash,
+           'eth_transfer'::text AS type,
+           crc_signup_2."user",
+           CASE
+               WHEN eth."from" = crc_signup_2."user" AND eth."to" = crc_signup_2."user" THEN 'self'::text
+               WHEN eth."from" = crc_signup_2."user" THEN 'out'::text
+               ELSE 'in'::text
+               END              AS direction,
+           eth.value,
+           row_to_json(eth.*)   AS obj
+    FROM eth_transfer_2 eth
+             JOIN crc_signup_2 ON crc_signup_2."user" = eth."from" OR crc_signup_2."user" = eth."to"
+    UNION ALL
+    SELECT seth."timestamp",
+           seth.block_number,
+           seth.index,
+           seth.hash,
+           'gnosis_safe_eth_transfer'::text AS type,
+           crc_signup_2."user",
+           CASE
+               WHEN seth."from" = crc_signup_2."user" AND seth."to" = crc_signup_2."user" THEN 'self'::text
+               WHEN seth."from" = crc_signup_2."user" THEN 'out'::text
+               ELSE 'in'::text
+               END                          AS direction,
+           seth.value,
+           row_to_json(seth.*)              AS obj
+    FROM gnosis_safe_eth_transfer_2 seth
+             JOIN crc_signup_2 ON crc_signup_2."user" = seth."from" OR crc_signup_2."user" = seth."to"
+)
+SELECT st."timestamp",
+       st.block_number,
+       st.index  AS transaction_index,
+       st.hash   AS transaction_hash,
+       st.type,
+       st."user" AS safe_address,
+       st.direction,
+       st.value,
+       st.obj
+FROM safe_timeline st;
 
 -- v3
 select number, hash, timestamp, total_transaction_count, null::timestamp as selected_at, null::timestamp as imported_at
-into block_staging
+into _block_staging
 from block
 limit 0;
 
@@ -801,36 +802,36 @@ create index ix_block_staging_number on _block_staging(number) include (hash, se
 create index ix_block_staging_selected_at_ on _block_staging(selected_at) include (hash, number, total_transaction_count);
 create index ix_block_staging_imported_at on _block_staging(imported_at) include (hash, number, total_transaction_count);
 
-select hash, hash, index, timestamp, block_number, "from", "to", value::text
-into crc_hub_transfer_staging
+select hash, index, timestamp, block_number, "from", "to", value::text
+into _crc_hub_transfer_staging
 from crc_hub_transfer_2
 limit 0;
 
 create index ix_crc_hub_transfer_staging_hash on _crc_hub_transfer_staging(hash) include (block_number);
 
 select *
-into crc_organisation_signup_staging
+into _crc_organisation_signup_staging
 from crc_organisation_signup_2
 limit 0;
 
 create index ix_crc_organisation_signup_staging_hash on _crc_organisation_signup_staging(hash) include (block_number);
 
 select *
-into crc_signup_staging
+into _crc_signup_staging
 from crc_signup_2
 limit 0;
 
 create index ix_crc_signup_staging_hash on _crc_signup_staging(hash) include (block_number);
 
 select *
-into crc_trust_staging
+into _crc_trust_staging
 from crc_trust_2
 limit 0;
 
 create index ix_crc_trust_staging_hash on _crc_trust_staging(hash) include (block_number);
 
 select hash, index, timestamp, block_number, "from", "to", token, value::text
-into erc20_transfer_staging
+into _erc20_transfer_staging
 from erc20_transfer_2
 limit 0;
 
@@ -839,7 +840,7 @@ create index ix_erc20_transfer_staging_from on _erc20_transfer_staging("from");
 create index ix_erc20_transfer_staging_to on _erc20_transfer_staging("to");
 
 select hash, index, timestamp, block_number, "from", "to", value::text
-into eth_transfer_staging
+into _eth_transfer_staging
 from eth_transfer_2
 limit 0;
 
@@ -847,8 +848,8 @@ create index ix_eth_transfer_staging_hash on _eth_transfer_staging(hash) include
 create index ix_eth_transfer_staging_from on _eth_transfer_staging("from");
 create index ix_eth_transfer_staging_to on _eth_transfer_staging("to");
 
-select hash, hash, index, timestamp, block_number, initiator, "from", "to", value::text
-into gnosis_safe_eth_transfer_staging
+select hash, index, timestamp, block_number, initiator, "from", "to", value::text
+into _gnosis_safe_eth_transfer_staging
 from gnosis_safe_eth_transfer_2
 limit 0;
 
@@ -857,7 +858,7 @@ create index ix_gnosis_safe_eth_transfer_staging_from on _gnosis_safe_eth_transf
 create index ix_gnosis_safe_eth_transfer_staging_to on _gnosis_safe_eth_transfer_staging("to");
 
 select block_number, "from", "to", hash, index, timestamp, value::text, input, nonce, type, classification
-into transaction_staging
+into _transaction_staging
 from transaction_2
 limit 0;
 
@@ -890,7 +891,7 @@ with a as (
 ), b as (
     select unnest(a.agg[2:]) as pk
     from a
-) 
+)
 delete from requested_blocks
 using b
 where b.pk = requested_blocks.pk;
@@ -912,7 +913,7 @@ with max_imported as (
 ), min_missing as (
     select min(block_no) -1 missing_block_begin
     from requested_blocks rb
-    left join block b on rb.block_no = b.number and b.number < (select number from max_imported)
+             left join block b on rb.block_no = b.number and b.number < (select number from max_imported)
     where b.number is null
 ), c as (
     select (select number from max_staging) - (select number from max_imported) as staging_distance
@@ -926,7 +927,7 @@ from c ;
 with c as (
     select a.block_no as requested, b.number as actual
     from requested_blocks a
-     left join block b on a.block_no = b.number
+             left join block b on a.block_no = b.number
     order by block_no
 ), d as (
     select max(requested) max_requested, max(actual) - 1 as max_imported, max(requested) - max(actual) as distance
@@ -944,11 +945,11 @@ from e;
 
 explain with common as (
     select number
-    from block b 
-    join requested_blocks rb on (rb.block_no = b.number)
+    from block b
+             join requested_blocks rb on (rb.block_no = b.number)
 )
-select max(common.number), min(common.number)
-from common;
+        select max(common.number), min(common.number)
+        from common;
 
 ------------------------------------------------------------------------
 -- checks for blocks with missing transactions
@@ -1025,7 +1026,7 @@ begin
     from completed_blocks
     where bs.number = completed_blocks.number;
 
-    -- insert all selected blocks    
+    -- insert all selected blocks
     insert into block
     select distinct sb.number, sb.hash, sb.timestamp, sb.total_transaction_count, 0 as indexed_transaction_count
     from _block_staging sb
@@ -1141,42 +1142,16 @@ begin
              join _gnosis_safe_eth_transfer_staging ts2 on sb.number = ts2.block_number
         and sb.selected_at = selected_at_ts
     on conflict do nothing;
-    
-    update _block_staging 
-    set 
+
+    update _block_staging
+    set
         imported_at = now()
       , selected_at = null
-    where selected_at = selected_at_ts 
+    where selected_at = selected_at_ts
        or already_available is not null;
 
-    /*
-    delete from _gnosis_safe_eth_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-    delete from _eth_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-    delete from _erc20_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-    delete from _crc_trust_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-    delete from _crc_signup_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-    delete from _crc_organisation_signup_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-    delete from _crc_hub_transfer_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-    delete from _transaction_staging where block_number in (select distinct number from _block_staging where imported_at is not null);
-    delete from _block_staging where imported_at is not null;
-    */
-/*
-    delete from _gnosis_safe_eth_transfer_staging where block_number in (select distinct number from _block_staging where selected_at = selected_at_ts or already_available is not null);
-    delete from _eth_transfer_staging where block_number in (select distinct number from _block_staging where selected_at = selected_at_ts or already_available is not null);
-    delete from _erc20_transfer_staging where block_number in (select distinct number from _block_staging where selected_at = selected_at_ts or already_available is not null);
-    delete from _crc_trust_staging where block_number in (select distinct number from _block_staging where selected_at = selected_at_ts or already_available is not null);
-    delete from _crc_signup_staging where block_number in (select distinct number from _block_staging where selected_at = selected_at_ts or already_available is not null);
-    delete from _crc_organisation_signup_staging where block_number in (select distinct number from _block_staging where selected_at = selected_at_ts or already_available is not null);
-    delete from _crc_hub_transfer_staging where block_number in (select distinct number from _block_staging where selected_at = selected_at_ts or already_available is not null);
-    delete from _transaction_staging where block_number in (select distinct number from _block_staging where selected_at = selected_at_ts or already_available is not null);
-    delete from _block_staging where number in (select distinct number from _block_staging where selected_at = selected_at_ts or already_available is not null);
-    delete from _block_staging where already_available is not null;
-    */
- 
 end;
 $$;
-
-
 
 create or replace procedure publish_event(topic text, message text)
 as
