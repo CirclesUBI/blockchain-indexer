@@ -652,7 +652,7 @@ WITH safe_timeline AS (
            cs.block_number,
            cs.index,
            cs.hash,
-           'crc_signup'::text AS type,
+           'CrcSignup'::text AS type,
            cs."user",
            'self'::text       AS direction,
            0                  AS value,
@@ -663,7 +663,7 @@ WITH safe_timeline AS (
            cht.block_number,
            cht.index,
            cht.hash,
-           'crc_hub_transfer'::text                  AS type,
+           'CrcHubTransfer'::text                  AS type,
            crc_signup_2."user",
            CASE
                WHEN cht."from" = crc_signup_2."user" AND cht."to" = crc_signup_2."user" THEN 'self'::text
@@ -693,7 +693,7 @@ WITH safe_timeline AS (
            ct.block_number,
            ct.index,
            ct.hash,
-           'crc_trust'::text AS type,
+           'CrcTrust'::text AS type,
            crc_signup_2."user",
            CASE
                WHEN ct.can_send_to = crc_signup_2."user" AND ct.address = crc_signup_2."user" THEN 'self'::text
@@ -709,7 +709,7 @@ WITH safe_timeline AS (
            ct.block_number,
            ct.index,
            ct.hash,
-           'crc_minting'::text AS type,
+           'CrcMinting'::text AS type,
            crc_signup_2."user",
            'in'::text          AS direction,
            ct.value,
@@ -721,7 +721,7 @@ WITH safe_timeline AS (
            eth.block_number,
            eth.index,
            eth.hash,
-           'eth_transfer'::text AS type,
+           'EthTransfer'::text AS type,
            crc_signup_2."user",
            CASE
                WHEN eth."from" = crc_signup_2."user" AND eth."to" = crc_signup_2."user" THEN 'self'::text
@@ -737,7 +737,7 @@ WITH safe_timeline AS (
            seth.block_number,
            seth.index,
            seth.hash,
-           'gnosis_safe_eth_transfer'::text AS type,
+           'GnosisSafeEthTransfer'::text AS type,
            crc_signup_2."user",
            CASE
                WHEN seth."from" = crc_signup_2."user" AND seth."to" = crc_signup_2."user" THEN 'self'::text

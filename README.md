@@ -33,6 +33,12 @@ Example message:
 The websocket server will only yield events when the IntervalSource is active.
 
 ## How it works
+The service uses an Akka.Net [stream](https://github.com/circlesland/blockchain-indexer/blob/997a0b393317882412bd2ad499cf1bdea34f1e0b/CirclesLand.BlockchainIndexer/Indexer..cs#L107) to process the incoming blocks. The basic flow is as following:
+```
+[BlockSource] -> [Download block with transactions] -> [Download transaction receipts] -> 
+  [Classify transactions] -> [Extract details] -> [Staging tables] -> [Import from staging]
+```
+
 ### BlockSource
 There are two different types of sources: One for bulk imports and another polling-source which periodically asks the rpc gateway for new blocks.
 The first one is used to update a large block backlog. The second one is used to keep the database up to date.
@@ -40,11 +46,16 @@ The first one is used to update a large block backlog. The second one is used to
 * [IntervalSource](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/Sources/IntervalSource.cs)
 * [LiveSource (incomplete)](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/Sources/LiveSource.cs)
 
-### Extractors
-The block sources download complete blocks. This way all transactions of a downloaded block could be processed in one go. 
-However since there seems to be no standard rpc-method to download all receipts for a block, these are downloaded one by one for each transaction.  
+### Download
+The block sources only emit block numbers downstream. The next stages download the block with all transactions and also all transaction-receipts.  
+Since there seems to be no standard rpc-method to download all receipts for a block, these are downloaded one by one for each transaction.  
 
-When a block is completely downloaded it is passed downstream to the following extractors which will create 0..n TransactionDetailModels for it:
+### Classify
+This step [classifies](https://github.com/circlesland/blockchain-indexer/blob/997a0b393317882412bd2ad499cf1bdea34f1e0b/CirclesLand.BlockchainIndexer/DetailExtractors/TransactionClassifier.cs#L12) all transactions.
+Classification and extraction are basically the same but are logically split into two stages.
+
+### Extractors
+All classified transactions are piped through the extractor step which extracts 0..N detail objects for each transaction.
 * [CrcHubTransferDetailExtractor](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/DetailExtractors/CrcHubTransferDetailExtractor.cs)
 * [CrcSignupDetailExtractor](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/DetailExtractors/CrcOrganisationSignupDetailExtractor.cs)
 * [CrcOrganisationSignupDetailExtractor](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/DetailExtractors/CrcOrganisationSignupDetailExtractor.cs)
@@ -55,7 +66,7 @@ When a block is completely downloaded it is passed downstream to the following e
 
 ### Staging tables
 The transactions and the extracted details are then written to dedicated staging tables. Its o.k. for staging tables to have duplicate entries. The data in these
-tables is kept until there is a confirmed row in the corresponding indexed database table (see "import_from_staging"). The schema is identical to the final indexed tables but without indexes.  
+tables is kept until there is a confirmed row in the corresponding indexed database table (see "import_from_staging"). The schema is nearly identical to the final indexed tables but without indexes.  
 
 All (bulk)insert statements can be found in the [StagingTables.cs](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/Persistence/StagingTables.cs) file.
 
@@ -74,13 +85,20 @@ Depending on the mode (bulk or live) the import_from_staging()-procedure is call
 * all others: 10 sec.
 
 **Consistency**  
-The [import_from_staging()](https://github.com/circlesland/blockchain-indexer/blob/0aba70b57e5702292b684a1603258bdf0fd64747/CirclesLand.BlockchainIndexer/Schema.sql#L956) procedure works in three steps and two stages:
+On the start of each round of the processing loop the service checks which is the last fully imported block.  
+It does this by comparing all "requested_blocks" to the actually imported blocks in the indexed tables.
+The "requested_blocks"-table is written by any indexer-instance directly after ist BlockSource emitted the block number.
+Missing blocks are catched-up until the index is in-sync with the rpc-gateway.
+
+The [import_from_staging()](https://github.com/circlesland/blockchain-indexer/blob/0aba70b57e5702292b684a1603258bdf0fd64747/CirclesLand.BlockchainIndexer/Schema.sql#L956) executes the following steps:  
 1) Mark rows in staging tables:
-1.1) All rows that form a complete block (number of distinct transactions equals the block's total_transaction_count).
-1.2) All rows that already exist in the indexed tables.
-2) Import all marked rows (only in subsequent calls)
-3) Delete all rows from the staging table that are marked with "already existing"  
-Everything is matched by it's hash but the contents are not validated.
+   1.1) All rows that form a complete block (number of distinct transactions equals the block's total_transaction_count) as "selected".
+   1.2) All rows that already exist in the indexed tables as "already_available".
+2) Import all distinct "selected" rows into their final table
+3) Mark all "selected" and "already_available" staging-blocks as "imported"  
+
+In the service:  
+4) The service deletes all "imported" rows from the staging tables and returns the hashes of the "imported" transactions to websocket subscribers.
 
 **Health checks**   
 There is no built in mechanism for health checks but it should be easy to listen to the transaction hashes and define a timeout and alert after N-seconds without new transactions.
