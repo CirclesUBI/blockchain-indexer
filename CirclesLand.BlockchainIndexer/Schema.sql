@@ -586,6 +586,16 @@ FROM crc_ledger_2
 GROUP BY crc_ledger_2.safe_address, crc_ledger_2.token, crc_ledger_2.token_owner
 ORDER BY crc_ledger_2.safe_address, (sum(crc_ledger_2.value)) DESC;
 
+create or replace view crc_balances_by_safe_and_token_2(safe_address, token, token_owner, balance) as
+SELECT crc_ledger_2.safe_address,
+       crc_ledger_2.token,
+       crc_ledger_2.token_owner,
+       sum(crc_ledger_2.value) AS balance,
+       max(crc_ledger_2.timestamp) AS last_change_at
+FROM crc_ledger_2
+GROUP BY crc_ledger_2.safe_address, crc_ledger_2.token, crc_ledger_2.token_owner
+ORDER BY crc_ledger_2.safe_address, (sum(crc_ledger_2.value)) DESC;
+
 create view crc_current_trust_2 ("user", user_token, can_send_to, can_send_to_token, "limit", history_count)
 as
 SELECT lte.address AS "user",

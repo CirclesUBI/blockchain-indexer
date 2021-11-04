@@ -332,9 +332,9 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                     new Parameter("address", 8),
                     new Parameter("bytes", 9));
 
-            initiator = transaction.From;
-            from = transaction.To;
-            to = decoded[0].Result as string;
+            initiator = transaction.From.ToLower();
+            from = transaction.To.ToLower();
+            to = (decoded[0].Result as string)?.ToLower();
             var v = decoded[1].Result as BigInteger?;
             if (v == null)
             {
