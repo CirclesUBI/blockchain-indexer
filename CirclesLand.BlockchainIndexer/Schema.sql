@@ -770,6 +770,143 @@ SELECT st."timestamp",
        st.obj
 FROM safe_timeline st;
 
+
+create or replace view crc_safe_timeline_2 (timestamp, block_number, transaction_index, transaction_hash, type, safe_address, contact_address, direction, value, obj) as
+WITH safe_timeline AS (
+    SELECT cs."timestamp",
+           cs.block_number,
+           cs.index,
+           cs.hash,
+           'CrcSignup'::text AS type,
+           cs."user",
+           cs."user" as contact_address,
+           'self'::text      AS direction,
+           0                 AS value,
+           row_to_json(cs.*) AS obj
+    FROM crc_signup_2 cs
+    UNION ALL
+    SELECT cht."timestamp",
+           cht.block_number,
+           cht.index,
+           cht.hash,
+           'CrcHubTransfer'::text                    AS type,
+           crc_signup_2."user",
+           CASE
+               WHEN cht."from" = crc_signup_2."user" AND cht."to" = crc_signup_2."user" THEN cht."to"
+               WHEN cht."from" = crc_signup_2."user" THEN cht."to"
+               ELSE cht."from"
+               END                                   AS contact_address,
+           CASE
+               WHEN cht."from" = crc_signup_2."user" AND cht."to" = crc_signup_2."user" THEN 'self'::text
+               WHEN cht."from" = crc_signup_2."user" THEN 'out'::text
+               ELSE 'in'::text
+               END                                   AS direction,
+           cht.value,
+           (SELECT json_agg(_steps.*) AS row_to_json
+            FROM (SELECT t_1.hash                                  AS "transactionHash",
+                         t_1."from",
+                         t_1."to",
+                         t_1.value::text                           AS flow,
+                         (SELECT json_agg(steps.*) AS transfers
+                          FROM (SELECT e20t."from",
+                                       e20t."to",
+                                       e20t.token,
+                                       e20t.value::text AS value
+                                FROM crc_token_transfer_2 e20t
+                                WHERE e20t.hash = t_1.hash) steps) AS transfers
+                  FROM crc_hub_transfer_2 t_1
+                  WHERE t_1.hash = cht.hash) _steps) AS transitive_path
+    FROM crc_hub_transfer_2 cht
+             JOIN crc_signup_2 ON crc_signup_2."user" = cht."from" OR crc_signup_2."user" = cht."to"
+    UNION ALL
+    SELECT ct."timestamp",
+           ct.block_number,
+           ct.index,
+           ct.hash,
+           'CrcTrust'::text  AS type,
+           crc_signup_2."user",
+           CASE
+               WHEN ct.can_send_to = crc_signup_2."user" AND ct.address = crc_signup_2."user" THEN crc_signup_2."user"
+               WHEN ct.can_send_to = crc_signup_2."user" THEN ct.address
+               ELSE ct.can_send_to
+               END           AS contact_address,
+           CASE
+               WHEN ct.can_send_to = crc_signup_2."user" AND ct.address = crc_signup_2."user" THEN 'self'::text
+               WHEN ct.can_send_to = crc_signup_2."user" THEN 'out'::text
+               ELSE 'in'::text
+               END           AS direction,
+           ct."limit",
+           row_to_json(ct.*) AS obj
+    FROM crc_trust_2 ct
+             JOIN crc_signup_2 ON crc_signup_2."user" = ct.address OR crc_signup_2."user" = ct.can_send_to
+    UNION ALL
+    SELECT ct."timestamp",
+           ct.block_number,
+           ct.index,
+           ct.hash,
+           'CrcMinting'::text AS type,
+           crc_signup_2."user",
+           ct."from" as contact_address,
+           'in'::text         AS direction,
+           ct.value,
+           row_to_json(ct.*)  AS obj
+    FROM crc_minting_2 ct
+             JOIN crc_signup_2 ON ct.token = crc_signup_2.token
+    UNION ALL
+    SELECT eth."timestamp",
+           eth.block_number,
+           eth.index,
+           eth.hash,
+           'EthTransfer'::text AS type,
+           crc_signup_2."user",
+           CASE
+               WHEN eth."from" = crc_signup_2."user" AND eth."to" = crc_signup_2."user" THEN crc_signup_2."user"
+               WHEN eth."from" = crc_signup_2."user" THEN eth."to"
+               ELSE eth."from"
+               END             AS contact_address,
+           CASE
+               WHEN eth."from" = crc_signup_2."user" AND eth."to" = crc_signup_2."user" THEN 'self'::text
+               WHEN eth."from" = crc_signup_2."user" THEN 'out'::text
+               ELSE 'in'::text
+               END             AS direction,
+           eth.value,
+           row_to_json(eth.*)  AS obj
+    FROM eth_transfer_2 eth
+             JOIN crc_signup_2 ON crc_signup_2."user" = eth."from" OR crc_signup_2."user" = eth."to"
+    UNION ALL
+    SELECT seth."timestamp",
+           seth.block_number,
+           seth.index,
+           seth.hash,
+           'GnosisSafeEthTransfer'::text AS type,
+           crc_signup_2."user",
+           CASE
+               WHEN seth."from" = crc_signup_2."user" AND seth."to" = crc_signup_2."user" THEN crc_signup_2."user"
+               WHEN seth."from" = crc_signup_2."user" THEN seth."to"
+               ELSE seth."from"
+               END             AS contact_address,
+           CASE
+               WHEN seth."from" = crc_signup_2."user" AND seth."to" = crc_signup_2."user" THEN 'self'::text
+               WHEN seth."from" = crc_signup_2."user" THEN 'out'::text
+               ELSE 'in'::text
+               END                       AS direction,
+           seth.value,
+           row_to_json(seth.*)           AS obj
+    FROM gnosis_safe_eth_transfer_2 seth
+             JOIN crc_signup_2 ON crc_signup_2."user" = seth."from" OR crc_signup_2."user" = seth."to"
+)
+SELECT st."timestamp",
+       st.block_number,
+       st.index  AS transaction_index,
+       st.hash   AS transaction_hash,
+       st.type,
+       st."user" AS safe_address,
+       st.contact_address,
+       st.direction,
+       st.value,
+       st.obj
+FROM safe_timeline st;
+
 -- v3
 select number, hash, timestamp, total_transaction_count, null::timestamp as selected_at, null::timestamp as imported_at
 into _block_staging
