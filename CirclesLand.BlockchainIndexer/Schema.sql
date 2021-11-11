@@ -1327,14 +1327,15 @@ drop table eth_transfer;
 drop table erc20_transfer;
 
 
+create view crc_all_signups as
+select c.hash, c.block_number, c.index, c.timestamp, c."user" as "user", c.token as "token"
+from crc_signup_2 c
+union all
+select c.hash, c.block_number, c.index, c.timestamp, c.organisation as "user", null as "token"
+from crc_organisation_signup_2 c;
+
 create or replace view crc_safe_timeline_2 (timestamp, block_number, transaction_index, transaction_hash, type, safe_address, contact_address, direction, value, obj) as
-WITH signups AS (
-    select c.hash, c.block_number, c.index, c.timestamp, c."user" as "user", c.token as "token"
-    from crc_signup_2 c
-    union all
-    select c.hash, c.block_number, c.index, c.timestamp, c.organisation as "user", null as "token"
-    from crc_organisation_signup_2 c
-),  safe_timeline AS (
+WITH safe_timeline AS (
     SELECT cs."timestamp",
            cs.block_number,
            cs.index,
@@ -1345,22 +1346,22 @@ WITH signups AS (
            'self'::text      AS direction,
            0                 AS value,
            row_to_json(cs.*) AS obj
-    FROM signups cs
+    FROM crc_all_signups cs
     UNION ALL
     SELECT cht."timestamp",
            cht.block_number,
            cht.index,
            cht.hash,
            'CrcHubTransfer'::text                    AS type,
-           signups."user",
+           crc_all_signups."user",
            CASE
-               WHEN cht."from" = signups."user" AND cht."to" = signups."user" THEN cht."to"
-               WHEN cht."from" = signups."user" THEN cht."to"
+               WHEN cht."from" = crc_all_signups."user" AND cht."to" = crc_all_signups."user" THEN cht."to"
+               WHEN cht."from" = crc_all_signups."user" THEN cht."to"
                ELSE cht."from"
                END                                   AS contact_address,
            CASE
-               WHEN cht."from" = signups."user" AND cht."to" = signups."user" THEN 'self'::text
-               WHEN cht."from" = signups."user" THEN 'out'::text
+               WHEN cht."from" = crc_all_signups."user" AND cht."to" = crc_all_signups."user" THEN 'self'::text
+               WHEN cht."from" = crc_all_signups."user" THEN 'out'::text
                ELSE 'in'::text
                END                                   AS direction,
            cht.value,
@@ -1379,83 +1380,83 @@ WITH signups AS (
                   FROM crc_hub_transfer_2 t_1
                   WHERE t_1.hash = cht.hash) _steps) AS transitive_path
     FROM crc_hub_transfer_2 cht
-             JOIN signups ON signups."user" = cht."from" OR signups."user" = cht."to"
+             JOIN crc_all_signups ON crc_all_signups."user" = cht."from" OR crc_all_signups."user" = cht."to"
     UNION ALL
     SELECT ct."timestamp",
            ct.block_number,
            ct.index,
            ct.hash,
            'CrcTrust'::text  AS type,
-           signups."user",
+           crc_all_signups."user",
            CASE
-               WHEN ct.can_send_to = signups."user" AND ct.address = signups."user" THEN signups."user"
-               WHEN ct.can_send_to = signups."user" THEN ct.address
+               WHEN ct.can_send_to = crc_all_signups."user" AND ct.address = crc_all_signups."user" THEN crc_all_signups."user"
+               WHEN ct.can_send_to = crc_all_signups."user" THEN ct.address
                ELSE ct.can_send_to
                END           AS contact_address,
            CASE
-               WHEN ct.can_send_to = signups."user" AND ct.address = signups."user" THEN 'self'::text
-               WHEN ct.can_send_to = signups."user" THEN 'out'::text
+               WHEN ct.can_send_to = crc_all_signups."user" AND ct.address = crc_all_signups."user" THEN 'self'::text
+               WHEN ct.can_send_to = crc_all_signups."user" THEN 'out'::text
                ELSE 'in'::text
                END           AS direction,
            ct."limit",
            row_to_json(ct.*) AS obj
     FROM crc_trust_2 ct
-             JOIN signups ON signups."user" = ct.address OR signups."user" = ct.can_send_to
+             JOIN crc_all_signups ON crc_all_signups."user" = ct.address OR crc_all_signups."user" = ct.can_send_to
     UNION ALL
     SELECT ct."timestamp",
            ct.block_number,
            ct.index,
            ct.hash,
            'CrcMinting'::text AS type,
-           signups."user",
+           crc_all_signups."user",
            ct."from" as contact_address,
            'in'::text         AS direction,
            ct.value,
            row_to_json(ct.*)  AS obj
     FROM crc_minting_2 ct
-             JOIN signups ON ct.token = signups.token
+             JOIN crc_all_signups ON ct.token = crc_all_signups.token
     UNION ALL
     SELECT eth."timestamp",
            eth.block_number,
            eth.index,
            eth.hash,
            'EthTransfer'::text AS type,
-           signups."user",
+           crc_all_signups."user",
            CASE
-               WHEN eth."from" = signups."user" AND eth."to" = signups."user" THEN signups."user"
-               WHEN eth."from" = signups."user" THEN eth."to"
+               WHEN eth."from" = crc_all_signups."user" AND eth."to" = crc_all_signups."user" THEN crc_all_signups."user"
+               WHEN eth."from" = crc_all_signups."user" THEN eth."to"
                ELSE eth."from"
                END             AS contact_address,
            CASE
-               WHEN eth."from" = signups."user" AND eth."to" = signups."user" THEN 'self'::text
-               WHEN eth."from" = signups."user" THEN 'out'::text
+               WHEN eth."from" = crc_all_signups."user" AND eth."to" = crc_all_signups."user" THEN 'self'::text
+               WHEN eth."from" = crc_all_signups."user" THEN 'out'::text
                ELSE 'in'::text
                END             AS direction,
            eth.value,
            row_to_json(eth.*)  AS obj
     FROM eth_transfer_2 eth
-             JOIN signups ON signups."user" = eth."from" OR signups."user" = eth."to"
+             JOIN crc_all_signups ON crc_all_signups."user" = eth."from" OR crc_all_signups."user" = eth."to"
     UNION ALL
     SELECT seth."timestamp",
            seth.block_number,
            seth.index,
            seth.hash,
            'GnosisSafeEthTransfer'::text AS type,
-           signups."user",
+           crc_all_signups."user",
            CASE
-               WHEN seth."from" = signups."user" AND seth."to" = signups."user" THEN signups."user"
-               WHEN seth."from" = signups."user" THEN seth."to"
+               WHEN seth."from" = crc_all_signups."user" AND seth."to" = crc_all_signups."user" THEN crc_all_signups."user"
+               WHEN seth."from" = crc_all_signups."user" THEN seth."to"
                ELSE seth."from"
                END             AS contact_address,
            CASE
-               WHEN seth."from" = signups."user" AND seth."to" = signups."user" THEN 'self'::text
-               WHEN seth."from" = signups."user" THEN 'out'::text
+               WHEN seth."from" = crc_all_signups."user" AND seth."to" = crc_all_signups."user" THEN 'self'::text
+               WHEN seth."from" = crc_all_signups."user" THEN 'out'::text
                ELSE 'in'::text
                END                       AS direction,
            seth.value,
            row_to_json(seth.*)           AS obj
     FROM gnosis_safe_eth_transfer_2 seth
-             JOIN signups ON signups."user" = seth."from" OR signups."user" = seth."to"
+             JOIN crc_all_signups ON crc_all_signups."user" = seth."from" OR crc_all_signups."user" = seth."to"
 )
 SELECT st."timestamp",
        st.block_number,
@@ -1467,4 +1468,6 @@ SELECT st."timestamp",
        st.direction,
        st.value,
        st.obj
-FROM safe_timeline st;
+FROM safe_timeline st
+where st."user" = '0xde374ece6fa50e781e81aac78e811b33d16912c7';
+
