@@ -1468,6 +1468,5 @@ SELECT st."timestamp",
        st.direction,
        st.value,
        st.obj
-FROM safe_timeline st
-where st."user" = '0xde374ece6fa50e781e81aac78e811b33d16912c7';
+FROM safe_timeline st;
 
