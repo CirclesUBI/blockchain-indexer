@@ -1470,3 +1470,21 @@ SELECT st."timestamp",
        st.obj
 FROM safe_timeline st;
 
+
+create or replace view crc_current_trust_2 ("user", user_token, can_send_to, can_send_to_token, "limit", history_count)
+as
+SELECT lte.address AS "user",
+       cs_a.token  AS user_token,
+       lte.can_send_to,
+       cs_b.token  AS can_send_to_token,
+       ct."limit",
+       lte.history_count
+FROM (SELECT max(crc_trust_2.hash)   AS hash,
+             count(crc_trust_2.hash) AS history_count,
+             crc_trust_2.address,
+             crc_trust_2.can_send_to
+      FROM crc_trust_2
+      GROUP BY crc_trust_2.address, crc_trust_2.can_send_to) lte
+         JOIN crc_trust_2 ct ON lte.hash = ct.hash
+         JOIN crc_all_signups cs_a ON lte.address = cs_a."user"
+         JOIN crc_all_signups cs_b ON lte.can_send_to = cs_b."user";
