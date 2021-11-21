@@ -55,7 +55,7 @@ namespace CirclesLand.BlockchainIndexer
                     if (roundStartsIn.TotalMilliseconds > 0)
                     {
                         Logger.Log($"Round {roundContext.RoundNo} starting at {roundContext.StartAt} ..");
-                        await Task.Delay(roundStartsIn);
+                        await Task.Delay(roundStartsIn, cancellationToken);
                     }
 
                     roundContext.Log($"Round {roundContext.RoundNo} started at {DateTime.Now}.");

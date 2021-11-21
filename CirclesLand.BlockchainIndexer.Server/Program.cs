@@ -13,6 +13,9 @@ namespace CirclesLand.BlockchainIndexer.Server
     {
         public static async Task Main(string[] args)
         {
+            // This is O.K. because all dates are UTC
+            AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+            
             using var host = Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
