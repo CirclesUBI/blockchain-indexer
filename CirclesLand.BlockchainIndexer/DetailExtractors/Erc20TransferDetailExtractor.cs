@@ -11,7 +11,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
         public static IEnumerable<IDetail> Extract(Transaction transactionData, TransactionReceipt receipt)
         {
             var erc20Logs = receipt.Logs
-                .Where(o => o.SelectToken("topics").Values<string>().Contains(TransactionClassifier.TransferEventTopic))
+                .Where(o => TransactionClassifier.GetTopics(o).Contains(TransactionClassifier.TransferEventTopic))
                 .ToArray();
             
             if (!erc20Logs.Any())

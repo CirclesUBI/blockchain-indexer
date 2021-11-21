@@ -56,7 +56,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
-                    )>?
+                    )>
                 safeEthTransfers)
         {
             using var writer = writerConnection.BeginBinaryImport(
@@ -97,11 +97,11 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         }
 
         public static int WriteEthTransfers(NpgsqlConnection writerConnection,
-            string? ethTransferTableName,
+            string ethTransferTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
-                    )>?
+                    )>
                 ethTransfers)
         {
             using var writer = writerConnection.BeginBinaryImport(
@@ -139,11 +139,11 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         }
 
         public static int WriteTrusts(NpgsqlConnection writerConnection,
-            string? trustTableName,
+            string trustTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
-                    )>?
+                    )>
                 trusts)
         {
             using var writer = writerConnection.BeginBinaryImport(
@@ -182,11 +182,11 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         }
 
         public static int WriteSignups(NpgsqlConnection writerConnection,
-            string? signupsTableName,
+            string signupsTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
-                    )>?
+                    )>
                 signups)
         {
             using var writer = writerConnection.BeginBinaryImport(
@@ -225,11 +225,11 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         }
 
         public static int WriteOrganisationSignups(NpgsqlConnection writerConnection,
-            string? organisationSignupsTableName,
+            string organisationSignupsTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
-                    )>?
+                    )>
                 organisationSignups)
         {
             using var writer = writerConnection.BeginBinaryImport(
@@ -266,11 +266,11 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         }
 
         public static int WriteHubTransfers(NpgsqlConnection writerConnection,
-            string? hubTransfersTableName,
+            string hubTransfersTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
-                    )>?
+                    )>
                 hubTransfers)
         {
             using var writer = writerConnection.BeginBinaryImport(
@@ -312,7 +312,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
-                    )>?
+                    )>
                 erc20Transfers)
         {
             using var writer = writerConnection.BeginBinaryImport(
@@ -356,7 +356,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
             IEnumerable<(int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details)>
                 transactionsWithExtractedDetails,
-            string? transactionTableName)
+            string transactionTableName)
         {
             using var writer = writerConnection.BeginBinaryImport(
                 @$"COPY {transactionTableName} (

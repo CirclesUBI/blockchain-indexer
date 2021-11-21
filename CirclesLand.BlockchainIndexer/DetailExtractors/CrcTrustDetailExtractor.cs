@@ -13,7 +13,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
         {
             var log = receipt.Logs
                 .FirstOrDefault(o =>
-                    o.SelectToken("topics").Values<string>().Contains(TransactionClassifier.CrcTrustEventTopic));
+                    TransactionClassifier.GetTopics(o).Contains(TransactionClassifier.CrcTrustEventTopic));
 
             if (log == null)
             {
@@ -27,7 +27,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                 out var user,
                 out var limit);
 
-            if (!isCrcTrust)
+            if (!isCrcTrust || canSendTo == null || user == null || limit == null)
             {
                 throw new Exception("The supplied transaction and receipt is not a CrcTrust.");
             }

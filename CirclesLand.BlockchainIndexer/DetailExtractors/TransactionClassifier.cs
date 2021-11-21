@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
@@ -11,6 +13,12 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
 {
     public static class TransactionClassifier
     {
+        public static IEnumerable<string> GetTopics(JToken log)
+        {
+            var topicsArray = log.SelectToken("topics");
+            return topicsArray?.Values<string>() ?? Array.Empty<string>();
+        }
+        
         public const string HubAddress = "0x29b9a7fbb8995b2423a71cc17cf9810798f6c543";
         public const string AddressEmptyBytesPrefix = "0x000000000000000000000000";
 
@@ -55,7 +63,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             // Decode and check the Signup-log
             //
             var signupLog = receipt.Logs.SingleOrDefault(log =>
-                log.SelectToken("topics").Values<string>().Contains(CrcSignupEventTopic));
+                GetTopics(log).Contains(CrcSignupEventTopic));
 
             if (signupLog == null)
             {
@@ -68,7 +76,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                 return false;
             }
 
-            var signupLogTopics = signupLog.SelectToken("topics").Values<string>().ToArray();
+            var signupLogTopics = GetTopics(signupLog).ToArray();
             if (signupLogTopics.Length != 2)
             {
                 return false;
@@ -186,7 +194,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             amount = null;
 
             var hubTransferLog = receipt.Logs.SingleOrDefault(log =>
-                log.SelectToken("topics").Values<string>().Contains(CrcHubTransferEventTopic));
+                GetTopics(log).Contains(CrcHubTransferEventTopic));
 
             if (hubTransferLog == null)
             {
@@ -199,7 +207,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                 return false;
             }
 
-            var hubTransferLogTopics = hubTransferLog.SelectToken("topics").Values<string>().ToArray();
+            var hubTransferLogTopics = GetTopics(hubTransferLog).ToArray();
             if (hubTransferLogTopics.Length != 3)
             {
                 return false;
@@ -356,14 +364,9 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             }
             
             var executionSuccessLog = receipt.Logs.SingleOrDefault(log =>
-                log.SelectToken("topics").Values<string>().Contains(ExecutionSuccessEventTopic));
+                GetTopics(log).Contains(ExecutionSuccessEventTopic));
             
-            if (executionSuccessLog == null)
-            {
-                return false;
-            }
-
-            return true;
+            return executionSuccessLog != null;
         }
 
         public static bool IsEoaEthTransfer (

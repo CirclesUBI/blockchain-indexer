@@ -70,7 +70,7 @@ namespace CirclesLand.BlockchainIndexer.Api
                         socket);
 
                     _logger.Log(LogLevel.Information,
-                        $"Established websocket connection {socketId} with ${context.Connection.RemoteIpAddress}:${context.Connection.RemotePort} ..");
+                        $"Established websocket connection {socketId} with {context.Connection.RemoteIpAddress}:{context.Connection.RemotePort} ..");
                     
                     if (!Clients.TryAdd(socketId, client))
                     {

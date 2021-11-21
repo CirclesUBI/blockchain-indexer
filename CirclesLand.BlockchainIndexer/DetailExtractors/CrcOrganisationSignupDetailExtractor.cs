@@ -11,7 +11,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
         public static IEnumerable<IDetail> Extract(Transaction transactionData, TransactionReceipt receipt)
         {
             var log = receipt.Logs
-                .FirstOrDefault(o => o.SelectToken("topics").Values<string>().Contains(TransactionClassifier.CrcOrganisationSignupEventTopic));
+                .FirstOrDefault(o => TransactionClassifier.GetTopics(o).Contains(TransactionClassifier.CrcOrganisationSignupEventTopic));
 
             if (log == null)
             {
