@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Net.WebSockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CirclesLand.BlockchainIndexer.Util;
@@ -63,19 +65,44 @@ namespace CirclesLand.BlockchainIndexer.Api
                     var socketId = Interlocked.Increment(ref _socketCounter);
                     var socket = await context.WebSockets.AcceptWebSocketAsync();
                     
-                    
                     var client = new ConnectedWebsocketClient(
                         socketId,
                         socket);
 
+                    _logger.Log(LogLevel.Information,
+                        $"Established websocket connection {socketId} with ${context.Connection.RemoteIpAddress}:${context.Connection.RemotePort} ..");
+                    
                     if (!Clients.TryAdd(socketId, client))
                     {
                         throw new Exception("Couldn't register the connection at the server.");
                     }
 
-                    // Will run until the client disconnects and else never "completes"
-                    var completion = new TaskCompletionSource<object>();
-                    await completion.Task;
+                    try
+                    {
+                        await Task.Run(async () =>
+                        {
+                            // Read from the websocket only to keep it alive.
+                            var buffer = new byte[2048];
+                            while (!context.RequestAborted.IsCancellationRequested)
+                            {
+                                await socket.ReceiveAsync(buffer, context.RequestAborted);
+                                await client.SendMessage("This service doesn't process any incoming messages.");
+                            }
+                        }, context.RequestAborted);
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Log(LogLevel.Warning,
+                            "A websocket connection experienced an error: " + e.Message);
+                        _logger.Log(LogLevel.Trace,
+                            "A websocket connection experienced an error: " + e.Message + "\n" + e.StackTrace);
+                    }
+                    finally
+                    {
+                        _logger.Log(LogLevel.Information,
+                            $"Removing websocket connection {socketId}");
+                        Clients.TryRemove(socketId, out _);
+                    }
                 }
                 else
                 {
