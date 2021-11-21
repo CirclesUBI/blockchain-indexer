@@ -62,24 +62,24 @@ namespace CirclesLand.BlockchainIndexer.Api
                 {
                     var socketId = Interlocked.Increment(ref _socketCounter);
                     var socket = await context.WebSockets.AcceptWebSocketAsync();
-                    var completion = new TaskCompletionSource<object>();
+                    
+                    
                     var client = new ConnectedWebsocketClient(
                         socketId,
-                        _hostLifetime,
-                        _logger,
-                        socket, 
-                        _appShutdownHandler.Token, 
-                        completion);
+                        socket);
 
                     if (!Clients.TryAdd(socketId, client))
                     {
                         throw new Exception("Couldn't register the connection at the server.");
                     }
 
+                    // Will run until the client disconnects and else never "completes"
+                    var completion = new TaskCompletionSource<object>();
                     await completion.Task;
                 }
                 else
                 {
+                    // Just a info message for http calls
                     if (context.Request.Headers["Accept"][0].Contains("text/html"))
                     {
                         await context.Response.WriteAsync("CirclesLand.TransactionIndexer WS endpoint.");
@@ -90,8 +90,7 @@ namespace CirclesLand.BlockchainIndexer.Api
             {
                 // HTTP 500 Internal server error
                 context.Response.StatusCode = 500;
-                Logger.LogError(ex.Message);
-                Logger.LogError(ex.StackTrace);
+                Logger.Log("A connection experienced an error: " + ex.Message);
             }
             finally
             {
@@ -104,7 +103,7 @@ namespace CirclesLand.BlockchainIndexer.Api
         }
 
         // event-handlers are the sole case where async void is valid
-        private async void ApplicationShutdownHandler()
+        private void ApplicationShutdownHandler()
         {
             _serverIsRunning = false;
         }

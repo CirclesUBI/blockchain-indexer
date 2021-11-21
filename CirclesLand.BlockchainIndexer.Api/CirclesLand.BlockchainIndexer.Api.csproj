@@ -11,7 +11,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\CirclesLand.BlockchainIndexer.Util\CirclesLand.BlockchainIndexer.Util.csproj" />
-      <ProjectReference Include="..\CirclesLand.Host\CirclesLand.Host.csproj" />
     </ItemGroup>
 
 </Project>
