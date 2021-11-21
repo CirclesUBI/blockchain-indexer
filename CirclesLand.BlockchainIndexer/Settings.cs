@@ -5,8 +5,12 @@ namespace CirclesLand.BlockchainIndexer
         public static string ConnectionString;
         public static string RpcEndpointUrl;
 
-        public static int UseBulkSourceThreshold = 10;
-        public static int BulkFlushInterval = 25;
+        public static int UseBulkSourceThreshold = 100;
+        /// <summary>
+        /// Specifies after how many imported blocks the import_from_staging_tables() procedure should be called.
+        /// </summary>
+        /// <remarks></remarks>
+        public static int BulkFlushInterval = 10;
         public static int BulkFlushTimeoutInSeconds = 240;
         public static int SerialFlushInterval = 1;
         public static int SerialFlushTimeoutInSeconds = 10;
