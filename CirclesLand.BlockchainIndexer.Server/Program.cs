@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using Npgsql;
-using DotNetHost = Microsoft.Extensions.Hosting.Host;
 
 namespace CirclesLand.BlockchainIndexer.Server
 {
@@ -24,17 +24,17 @@ namespace CirclesLand.BlockchainIndexer.Server
             {
                 var csb = new NpgsqlConnectionStringBuilder(connectionString);
                 if (string.IsNullOrWhiteSpace(csb.Host))
-                    validationErrors.Add("The connection string contains no 'Server'");
+                    validationErrors.Add("The INDEXER_CONNECTION_STRING contains no 'Server'");
                 if (string.IsNullOrWhiteSpace(csb.Username))
-                    validationErrors.Add("The connection string contains no 'User ID'");
+                    validationErrors.Add("The INDEXER_CONNECTION_STRING contains no 'User ID'");
                 if (string.IsNullOrWhiteSpace(csb.Database))
-                    validationErrors.Add("The connection string contains no 'Database'");
+                    validationErrors.Add("The INDEXER_CONNECTION_STRING contains no 'Database'");
 
                 ConnectionString = connectionString;
             }
             catch (Exception ex)
             {
-                validationErrors.Add("The connection string is not valid:");
+                validationErrors.Add("The INDEXER_CONNECTION_STRING is not valid:");
                 validationErrors.Add(ex.Message);
             }
 
@@ -59,23 +59,34 @@ namespace CirclesLand.BlockchainIndexer.Server
             }
 
             Debug.Assert(rpcGatewayUri != null, nameof(rpcGatewayUri) + " != null");
-
-            Settings.ConnectionString = connectionString;
-            Settings.RpcEndpointUrl = rpcGatewayUri.ToString();
             
-            var indexer = new Indexer();
-            // TODO: Use cancellation token
-            indexer.Run();
-            
-
-            DotNetHost.CreateDefaultBuilder(args)
+            var host = Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseUrls(@$"{websocketUrl}");
                     webBuilder.UseStartup<Startup>();
                 })
-                .Build()
-                .Run();
+                .Build();
+            
+            
+            Settings.ConnectionString = connectionString;
+            Settings.RpcEndpointUrl = rpcGatewayUri.ToString();
+            
+            var indexer = new Indexer();
+            var cancelIndexerSource = new CancellationTokenSource();
+            indexer.Run(cancelIndexerSource.Token).ContinueWith(async t =>
+            {
+                if (t.Exception != null)
+                {
+                    Console.WriteLine(t.Exception.Message);
+                    Console.WriteLine(t.Exception.StackTrace);
+                }
+                
+                Console.WriteLine("CirclesLand.BlockchainIndexer.Indexer.Run() returned. Stopping the host..");
+                await host.StopAsync(TimeSpan.FromSeconds(30));
+            });
+            
+            await host.RunAsync();
         }
     }
 }

@@ -7,7 +7,9 @@ namespace CirclesLand.BlockchainIndexer
 
         public static int UseBulkSourceThreshold = 10;
         public static int BulkFlushInterval = 25;
+        public static int BulkFlushTimeoutInSeconds = 240;
         public static int SerialFlushInterval = 1;
+        public static int SerialFlushTimeoutInSeconds = 10;
 
         public static int ErrorRestartPenaltyInMs = 1000 * 5;
         public static int MaxErrorRestartPenaltyInMs = 1000 * 60 * 2;

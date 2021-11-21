@@ -37,20 +37,18 @@ namespace CirclesLand.BlockchainIndexer
 
     public class Indexer
     {
-        public event EventHandler<IndexedBlockEventArgs> NewBlock;
-
         public IndexerMode Mode { get; private set; } = IndexerMode.NotRunning;
 
-        public async Task Run()
+        public async Task Run(CancellationToken cancellationToken)
         {
             var system = ActorSystem.Create("system");
             var materializer = system.Materializer();
             var instanceContext = new InstanceContext();
 
-            while (true)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 var roundContext = instanceContext.CreateRoundContext();
-
+                
                 try
                 {
                     var roundStartsIn = roundContext.StartAt - DateTime.Now;
@@ -237,7 +235,9 @@ namespace CirclesLand.BlockchainIndexer
                             {
                                 roundContext.Log($" Importing from staging tables ..");
                                 ImportProcedure.ImportFromStaging(roundContext.Connection
-                                    , Mode == IndexerMode.CatchUp ? 120 : 10);
+                                    , Mode == IndexerMode.CatchUp 
+                                        ? Settings.BulkFlushTimeoutInSeconds 
+                                        : Settings.SerialFlushTimeoutInSeconds);
                             
                                 roundContext.Log($" Cleaning staging tables ..");
                                 writtenTransactions = StagingTables.CleanImported(roundContext.Connection);
