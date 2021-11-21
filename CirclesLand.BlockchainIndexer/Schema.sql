@@ -1490,7 +1490,6 @@ FROM (SELECT max(crc_trust_2.hash)   AS hash,
          JOIN crc_all_signups cs_b ON lte.can_send_to = cs_b."user";
 
 
-
 create or replace view crc_safe_timeline_2 (timestamp, block_number, transaction_index, transaction_hash, type, safe_address, contact_address, direction, value, obj) as
 WITH safe_timeline AS (
     SELECT cs."timestamp",
@@ -1594,27 +1593,28 @@ WITH safe_timeline AS (
     FROM eth_transfer_2 eth
              JOIN crc_all_signups ON crc_all_signups."user" = eth."from" OR crc_all_signups."user" = eth."to"
     UNION ALL
-    SELECT hmn."timestamp",
-           hmn.block_number,
-           hmn.index,
-           hmn.hash,
-           'HmnTransfer'::text AS type,
+    SELECT erc20."timestamp",
+           erc20.block_number,
+           erc20.index,
+           erc20.hash,
+           'Erc20Transfer'::text AS type,
            crc_all_signups."user",
            CASE
-               WHEN hmn."from" = crc_all_signups."user" AND hmn."to" = crc_all_signups."user" THEN crc_all_signups."user"
-               WHEN hmn."from" = crc_all_signups."user" THEN hmn."to"
-               ELSE hmn."from"
+               WHEN erc20."from" = crc_all_signups."user" AND erc20."to" = crc_all_signups."user" THEN crc_all_signups."user"
+               WHEN erc20."from" = crc_all_signups."user" THEN erc20."to"
+               ELSE erc20."from"
                END             AS contact_address,
            CASE
-               WHEN hmn."from" = crc_all_signups."user" AND hmn."to" = crc_all_signups."user" THEN 'self'::text
-               WHEN hmn."from" = crc_all_signups."user" THEN 'out'::text
+               WHEN erc20."from" = crc_all_signups."user" AND erc20."to" = crc_all_signups."user" THEN 'self'::text
+               WHEN erc20."from" = crc_all_signups."user" THEN 'out'::text
                ELSE 'in'::text
                END             AS direction,
-           hmn.value,
-           row_to_json(hmn.*)  AS obj
-    FROM erc20_transfer_2 hmn
-             JOIN crc_all_signups ON crc_all_signups."user" = hmn."from" OR crc_all_signups."user" = hmn."to"
-    where hmn.token = '0x5227e8810281482f25454a8f00ea871589fc040e'
+           erc20.value,
+           row_to_json(erc20.*)  AS obj
+    FROM erc20_transfer_2 erc20
+             JOIN crc_all_signups ON crc_all_signups."user" = erc20."from" OR crc_all_signups."user" = erc20."to"
+             LEFT JOIN crc_Signup_2 s on s.token = erc20.token
+    WHERE s.token is null
     UNION ALL
     SELECT seth."timestamp",
            seth.block_number,
@@ -1648,3 +1648,46 @@ SELECT st."timestamp",
        st.value,
        st.obj
 FROM safe_timeline st;
+
+create or replace view erc20_balances_by_safe_and_token as
+    with non_circles_transfers as (
+        -- Todo: Filter all tokens which have been minted before the circles-hub inception
+        select et.timestamp
+             , et.block_number
+             , t.index as transaction_index
+             , t.hash as transaction_hash
+             , 'Erc20Transfer' as type
+             , et.token
+             , et."from"
+             , et."to"
+             , et."value"
+        from erc20_transfer_2 et
+                 join crc_all_signups alls on alls."user" = et."from" or alls."user" = et."to"
+                 left join crc_signup_2 s on s.token = et.token
+                 join transaction_2 t on et.hash = t.hash
+        where s.token is null -- only non-circles tokens
+    ), non_circles_ledger as (
+        select nct.timestamp
+             , nct.block_number
+             , nct.transaction_index
+             , nct.transaction_hash
+             , nct.type
+             , alls."user" as safe_address
+             , case when nct."from" = alls."user" then nct."to" else nct."from" end as contact_address
+             , case when nct."from" = alls."user" then 'out' else 'in' end as direction
+             , nct.token
+             , nct."from"
+             , nct."to"
+             , nct.value
+        from crc_all_signups alls
+                 join non_circles_transfers nct on alls."user" = nct."from" or alls."user" = nct."to"
+    ), erc20_balances as (
+        select safe_address
+             , token
+             , sum(case when direction = 'in' then value else value * -1 end) as balance
+             , max(timestamp) as last_changed_at
+        from non_circles_ledger
+        group by safe_address, token
+    )
+    select *
+    from erc20_balances;
