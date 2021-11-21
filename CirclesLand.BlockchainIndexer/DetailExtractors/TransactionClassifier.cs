@@ -16,7 +16,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
         public static IEnumerable<string> GetTopics(JToken log)
         {
             var topicsArray = log.SelectToken("topics");
-            return topicsArray?.Values<string>() ?? Array.Empty<string>();
+            return (IEnumerable<string>?)topicsArray?.Values<string>().Where(o => o != null) ?? Array.Empty<string>();
         }
         
         public const string HubAddress = "0x29b9a7fbb8995b2423a71cc17cf9810798f6c543";
@@ -83,7 +83,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             }
 
             userAddress = signupLogTopics[1].Replace(AddressEmptyBytesPrefix, "0x");
-            tokenAddress = signupLog.Value<string>("data").Replace(AddressEmptyBytesPrefix, "0x");
+            tokenAddress = signupLog.Value<string>("data")?.Replace(AddressEmptyBytesPrefix, "0x");
 
             //
             // Decode and check the Trust-log
@@ -155,13 +155,9 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
         {
             organisationAddress = null;
 
-            var topics = logEntry.SelectToken("topics");
-            if (topics == null)
-            {
-                return false;
-            }
+            var topics = GetTopics(logEntry).ToArray();
 
-            if (!topics.Values<string>().Contains(CrcOrganisationSignupEventTopic))
+            if (!topics.Contains(CrcOrganisationSignupEventTopic))
             {
                 return false;
             }
@@ -172,13 +168,12 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                 return false;
             }
 
-            var organisationSignupLogTopics = topics.Values<string>().ToArray();
-            if (organisationSignupLogTopics.Length != 2)
+            if (topics.Length != 2)
             {
                 return false;
             }
 
-            organisationAddress = organisationSignupLogTopics[1].Replace(AddressEmptyBytesPrefix, "0x");
+            organisationAddress = topics[1].Replace(AddressEmptyBytesPrefix, "0x");
 
             return true;
         }
@@ -215,8 +210,11 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
 
             from = hubTransferLogTopics[1].Replace(AddressEmptyBytesPrefix, "0x");
             to = hubTransferLogTopics[2].Replace(AddressEmptyBytesPrefix, "0x");
-            var amountStr = hubTransferLog.Value<string>("data").Replace(AddressEmptyBytesPrefix, "0x");
-            amount = new HexBigInteger(amountStr);
+            var amountStr = hubTransferLog.Value<string>("data")?.Replace(AddressEmptyBytesPrefix, "0x");
+            if (amountStr != null)
+            {
+                amount = new HexBigInteger(amountStr);
+            }
 
             // TODO: Check if "from" and "to" previously appeared in a CrcSignup
             // Hub transfers always appear together with at least one ERC20 transfer
@@ -233,13 +231,9 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             user = null;
             limit = null;
 
-            var topics = logEntry.SelectToken("topics");
-            if (topics == null)
-            {
-                return false;
-            }
+            var topics = GetTopics(logEntry).ToArray();
 
-            if (!topics.Values<string>().Contains(CrcTrustEventTopic))
+            if (!topics.Contains(CrcTrustEventTopic))
             {
                 return false;
             }
@@ -250,14 +244,13 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                 return false;
             }
 
-            var trustLogTopics = topics.Values<string>().ToArray();
-            if (trustLogTopics.Length != 3)
+            if (topics.Length != 3)
             {
                 return false;
             }
 
-            canSendTo = trustLogTopics[1].Replace(AddressEmptyBytesPrefix, "0x");
-            user = trustLogTopics[2].Replace(AddressEmptyBytesPrefix, "0x");
+            canSendTo = topics[1].Replace(AddressEmptyBytesPrefix, "0x");
+            user = topics[2].Replace(AddressEmptyBytesPrefix, "0x");
             limit = new HexBigInteger(logEntry.Value<string>("data"));
 
             if (limit.Value < 0 || limit.Value > 100)
@@ -281,29 +274,27 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             to = null;
             value = null;
 
-            var topics = logEntry.SelectToken("topics");
-            if (topics == null)
+            var topics = GetTopics(logEntry).ToArray();
+
+            if (!topics.Contains(TransferEventTopic))
             {
                 return false;
             }
 
-            if (!topics.Values<string>().Contains(TransferEventTopic))
-            {
-                return false;
-            }
-
-            var transferLogTopics = topics.Values<string>().ToArray();
-            if (transferLogTopics.Length != 3)
+            if (topics.Length != 3)
             {
                 return false;
             }
 
             tokenAddress = logEntry.Value<string>("address");
-            from = transferLogTopics[1].Replace(AddressEmptyBytesPrefix, "0x");
-            to = transferLogTopics[2].Replace(AddressEmptyBytesPrefix, "0x");
-            var valueStr = logEntry.Value<string>("data").Replace(AddressEmptyBytesPrefix, "0x");
-            value = new HexBigInteger(valueStr);
-
+            from = topics[1].Replace(AddressEmptyBytesPrefix, "0x");
+            to = topics[2].Replace(AddressEmptyBytesPrefix, "0x");
+            var valueStr = logEntry.Value<string>("data")?.Replace(AddressEmptyBytesPrefix, "0x");
+            if (valueStr != null)
+            {
+                value = new HexBigInteger(valueStr);
+            }
+            
             return true;
         }
 

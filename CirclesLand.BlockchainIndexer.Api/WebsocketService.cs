@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Net.WebSockets;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CirclesLand.BlockchainIndexer.Util;
@@ -13,13 +11,12 @@ namespace CirclesLand.BlockchainIndexer.Api
 {
     public class WebsocketService : IMiddleware
     {
-        public static readonly ConcurrentDictionary<int, ConnectedWebsocketClient> Clients = new();
+        private static readonly ConcurrentDictionary<int, ConnectedWebsocketClient> Clients = new();
 
-        private static int _socketCounter = 0;
+        private static int _socketCounter;
         private static bool _serverIsRunning = true;
 
         private static CancellationTokenRegistration _appShutdownHandler;
-        private readonly IHostApplicationLifetime _hostLifetime;
         private readonly ILogger<WebsocketService> _logger;
 
         public WebsocketService(IHostApplicationLifetime hostLifetime, ILogger<WebsocketService> logger)
@@ -29,8 +26,7 @@ namespace CirclesLand.BlockchainIndexer.Api
             {
                 _appShutdownHandler = hostLifetime.ApplicationStopping.Register(ApplicationShutdownHandler);
             }
-
-            _hostLifetime = hostLifetime;
+            
             _logger = logger;
         }
 
@@ -48,6 +44,7 @@ namespace CirclesLand.BlockchainIndexer.Api
                     Logger.LogError(e.StackTrace);
                 }
             }
+            Console.WriteLine($"Broadcasted the following message to {Clients.Values.Count} websocket clients: \n{messageString}");
         }
 
         public async Task InvokeAsync(HttpContext context, RequestDelegate next)
@@ -79,16 +76,8 @@ namespace CirclesLand.BlockchainIndexer.Api
 
                     try
                     {
-                        await Task.Run(async () =>
-                        {
-                            // Read from the websocket only to keep it alive.
-                            var buffer = new byte[2048];
-                            while (!context.RequestAborted.IsCancellationRequested)
-                            {
-                                await socket.ReceiveAsync(buffer, context.RequestAborted);
-                                await client.SendMessage("This service doesn't process any incoming messages.");
-                            }
-                        }, context.RequestAborted);
+                        // Read from the websocket only to keep it alive.
+                        await client.ReceiveAsync(context, socket);
                     }
                     catch (Exception e)
                     {
@@ -101,7 +90,15 @@ namespace CirclesLand.BlockchainIndexer.Api
                     {
                         _logger.Log(LogLevel.Information,
                             $"Removing websocket connection {socketId}");
-                        Clients.TryRemove(socketId, out _);
+                        Clients.TryRemove(socketId, out client);
+                        try
+                        {
+                            client?.Dispose();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning($"Couldn't dispose websocket {socketId}:", ex);
+                        }
                     }
                 }
                 else

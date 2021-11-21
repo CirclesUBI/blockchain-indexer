@@ -22,8 +22,12 @@ namespace CirclesLand.BlockchainIndexer.Server
                 .Build();
 
             var indexer = new Indexer();
+            
             var cancelIndexerSource = new CancellationTokenSource();
-            indexer.Run(cancelIndexerSource.Token).ContinueWith(async t =>
+            
+#pragma warning disable 4014
+            indexer.Run(cancelIndexerSource.Token).ContinueWith(t =>
+#pragma warning restore 4014
             {
                 if (t.Exception != null)
                 {
@@ -32,10 +36,26 @@ namespace CirclesLand.BlockchainIndexer.Server
                 }
 
                 Console.WriteLine("CirclesLand.BlockchainIndexer.Indexer.Run() returned. Stopping the host..");
-                await host.StopAsync(TimeSpan.FromSeconds(30));
-            });
+                try
+                {
+                    cancelIndexerSource.Cancel();
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine("Cancellation order?: The Host ended before the Indexer");
+                }
+            }, cancelIndexerSource.Token);
 
-            await host.RunAsync();
+            await host.RunAsync(cancelIndexerSource.Token);
+            
+            try
+            {
+                cancelIndexerSource.Cancel();
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("Cancellation order?: The Indexer ended before the Host");
+            }
         }
     }
 }

@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
 namespace CirclesLand.BlockchainIndexer.Api
 {
@@ -20,7 +21,6 @@ namespace CirclesLand.BlockchainIndexer.Api
 
         public async Task SendMessage(string messageString)
         {
-            Console.WriteLine($"Socket {SocketId} sent: {messageString}");
             var stringBytes = Encoding.UTF8.GetBytes(messageString);
             await Socket.SendAsync(stringBytes, WebSocketMessageType.Text, true, CancellationToken.None);
         }
@@ -28,6 +28,22 @@ namespace CirclesLand.BlockchainIndexer.Api
         public void Dispose()
         {
             Socket?.Dispose();
+        }
+        
+        public async Task ReceiveAsync(HttpContext context, WebSocket socket)
+        {
+            // TODO: Is this Task.Run really required?
+            await Task.Run(async () =>
+            {
+                var buffer = new byte[8];
+                while (!context.RequestAborted.IsCancellationRequested)
+                {
+                    await socket.ReceiveAsync(buffer, context.RequestAborted);
+                    await SendMessage("This service doesn't process any incoming messages.");
+
+                    context.Abort();
+                }
+            }, context.RequestAborted);
         }
     }
 }
