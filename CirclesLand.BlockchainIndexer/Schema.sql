@@ -1691,3 +1691,21 @@ create or replace view erc20_balances_by_safe_and_token as
     )
     select *
     from erc20_balances;
+
+create or replace view crc_current_trust_2
+as
+SELECT lte.address AS "user",
+       cs_a.token  AS user_token,
+       lte.can_send_to,
+       cs_b.token  AS can_send_to_token,
+       ct."limit",
+       lte.history_count
+FROM (SELECT max(crc_trust_2.block_number) AS block_number, -- Todo: This must be max. block_number and max. index within that block
+             count(crc_trust_2.hash) AS history_count,
+             crc_trust_2.address,
+             crc_trust_2.can_send_to
+      FROM crc_trust_2
+      GROUP BY crc_trust_2.address, crc_trust_2.can_send_to) lte
+         JOIN crc_trust_2 ct ON lte.block_number = ct.block_number
+         JOIN crc_signup_2 cs_a ON lte.address = cs_a."user"
+         JOIN crc_signup_2 cs_b ON lte.can_send_to = cs_b."user";
