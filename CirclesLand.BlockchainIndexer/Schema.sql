@@ -1288,6 +1288,15 @@ from crc_token_transfer_2 tt
 group by tt."to"
 having max(b.timestamp) > now() - interval '90 days';
 
+create view crc_dead_accounts
+as
+select tt."to"
+from crc_token_transfer_2 tt
+         join transaction_2 t on tt.hash = t.hash
+         join block b on t.block_number = b.number
+group by tt."to"
+having max(b.timestamp) < now() - interval '90 days';
+
 create view crc_hub_transfers_per_day
 as
 select b.timestamp::date, count(*) as transfers
@@ -1707,5 +1716,8 @@ FROM (SELECT max(crc_trust_2.block_number) AS block_number, -- Todo: This must b
       FROM crc_trust_2
       GROUP BY crc_trust_2.address, crc_trust_2.can_send_to) lte
          JOIN crc_trust_2 ct ON lte.block_number = ct.block_number
-         JOIN crc_signup_2 cs_a ON lte.address = cs_a."user"
-         JOIN crc_signup_2 cs_b ON lte.can_send_to = cs_b."user";
+         JOIN crc_all_signups cs_a ON lte.address = cs_a."user"
+         JOIN crc_all_signups cs_b ON lte.can_send_to = cs_b."user";
+
+
+

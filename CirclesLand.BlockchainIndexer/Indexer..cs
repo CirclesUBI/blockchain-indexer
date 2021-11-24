@@ -102,6 +102,8 @@ namespace CirclesLand.BlockchainIndexer
                         flushEveryNthRound = Settings.SerialFlushInterval;
                     }
 
+                    // roundContext.Log($"Starting with source {source?.GetType()?.Name ?? "<null>"}");
+                    
                     await source
                         .Select(o =>
                         {
@@ -191,7 +193,7 @@ namespace CirclesLand.BlockchainIndexer
                                     GnosisSafeABI.Json, signup.User);
                                 var function = contract.GetFunction("getOwners");
                                 var owners = await function.CallAsync<List<string>>();
-                                signup.Owners = owners.Select(o => o.ToLower()).ToArray();
+                                signup.Owners = owners?.Select(o => o.ToLower()).ToArray() ?? Array.Empty<string>();
                             }
                             
                             var organisationSignups = extractedDetails
