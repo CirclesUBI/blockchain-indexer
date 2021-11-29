@@ -1720,4 +1720,188 @@ FROM (SELECT max(crc_trust_2.block_number) AS block_number, -- Todo: This must b
          JOIN crc_all_signups cs_b ON lte.can_send_to = cs_b."user";
 
 
+create view formatted_crc_hub_transfer
+as
+    select hash, index, timestamp, block_number, "from", "to", value::text
+    from crc_hub_transfer_2;
+
+create view formatted_erc20_transfer
+as
+    select hash, index, timestamp, block_number, "from", "to", token, value::text
+    from erc20_transfer_2;
+
+create view formatted_eth_transfer
+as
+    select hash, index, timestamp, block_number, "from", "to", value::text
+    from eth_transfer_2;
+
+create view formatted_gnosis_safe_eth_transfer
+as
+    select hash, index, timestamp, block_number, initiator, "from", "to", value::text
+    from gnosis_safe_eth_transfer_2;
+
+create view formatted_crc_minting
+as
+    select timestamp, block_number, index, hash, "from", "to", token, value::text
+    from crc_minting_2;
+
+
+create or replace view crc_safe_timeline_2 (timestamp, block_number, transaction_index, transaction_hash, type, safe_address, contact_address, direction, value, obj) as
+WITH safe_timeline AS (
+    SELECT cs."timestamp",
+           cs.block_number,
+           cs.index,
+           cs.hash,
+           'CrcSignup'::text AS type,
+           cs."user",
+           cs."user" as contact_address,
+           'self'::text      AS direction,
+           0::text           AS value,
+           row_to_json(cs.*) AS obj
+    FROM crc_all_signups cs
+    UNION ALL
+    SELECT cht."timestamp",
+           cht.block_number,
+           cht.index,
+           cht.hash,
+           'CrcHubTransfer'::text                    AS type,
+           crc_all_signups."user",
+           CASE
+               WHEN cht."from" = crc_all_signups."user" AND cht."to" = crc_all_signups."user" THEN cht."to"
+               WHEN cht."from" = crc_all_signups."user" THEN cht."to"
+               ELSE cht."from"
+               END                                   AS contact_address,
+           CASE
+               WHEN cht."from" = crc_all_signups."user" AND cht."to" = crc_all_signups."user" THEN 'self'::text
+               WHEN cht."from" = crc_all_signups."user" THEN 'out'::text
+               ELSE 'in'::text
+               END                                   AS direction,
+           cht.value::text,
+           (SELECT json_agg(_steps.*) AS row_to_json
+            FROM (SELECT t_1.hash                                  AS "transactionHash",
+                         t_1."from",
+                         t_1."to",
+                         t_1.value::text                           AS flow,
+                         (SELECT json_agg(steps.*) AS transfers
+                          FROM (SELECT e20t."from",
+                                       e20t."to",
+                                       e20t.token,
+                                       e20t.value::text AS value
+                                FROM crc_token_transfer_2 e20t
+                                WHERE e20t.hash = t_1.hash) steps) AS transfers
+                  FROM crc_hub_transfer_2 t_1
+                  WHERE t_1.hash = cht.hash) _steps) AS transitive_path
+    FROM formatted_crc_hub_transfer cht
+             JOIN crc_all_signups ON crc_all_signups."user" = cht."from" OR crc_all_signups."user" = cht."to"
+    UNION ALL
+    SELECT ct."timestamp",
+           ct.block_number,
+           ct.index,
+           ct.hash,
+           'CrcTrust'::text  AS type,
+           crc_all_signups."user",
+           CASE
+               WHEN ct.can_send_to = crc_all_signups."user" AND ct.address = crc_all_signups."user" THEN crc_all_signups."user"
+               WHEN ct.can_send_to = crc_all_signups."user" THEN ct.address
+               ELSE ct.can_send_to
+               END           AS contact_address,
+           CASE
+               WHEN ct.can_send_to = crc_all_signups."user" AND ct.address = crc_all_signups."user" THEN 'self'::text
+               WHEN ct.can_send_to = crc_all_signups."user" THEN 'out'::text
+               ELSE 'in'::text
+               END           AS direction,
+           ct."limit"::text,
+           row_to_json(ct.*) AS obj
+    FROM crc_trust_2 ct
+             JOIN crc_all_signups ON crc_all_signups."user" = ct.address OR crc_all_signups."user" = ct.can_send_to
+    UNION ALL
+    SELECT ct."timestamp",
+           ct.block_number,
+           ct.index,
+           ct.hash,
+           'CrcMinting'::text AS type,
+           crc_all_signups."user",
+           ct."from" as contact_address,
+           'in'::text         AS direction,
+           ct.value::text,
+           row_to_json(ct.*)  AS obj
+    FROM formatted_crc_minting ct
+             JOIN crc_all_signups ON ct.token = crc_all_signups.token
+    UNION ALL
+    SELECT eth."timestamp",
+           eth.block_number,
+           eth.index,
+           eth.hash,
+           'EthTransfer'::text AS type,
+           crc_all_signups."user",
+           CASE
+               WHEN eth."from" = crc_all_signups."user" AND eth."to" = crc_all_signups."user" THEN crc_all_signups."user"
+               WHEN eth."from" = crc_all_signups."user" THEN eth."to"
+               ELSE eth."from"
+               END             AS contact_address,
+           CASE
+               WHEN eth."from" = crc_all_signups."user" AND eth."to" = crc_all_signups."user" THEN 'self'::text
+               WHEN eth."from" = crc_all_signups."user" THEN 'out'::text
+               ELSE 'in'::text
+               END             AS direction,
+           eth.value::text,
+           row_to_json(eth.*)  AS obj
+    FROM formatted_eth_transfer eth
+             JOIN crc_all_signups ON crc_all_signups."user" = eth."from" OR crc_all_signups."user" = eth."to"
+    UNION ALL
+    SELECT erc20."timestamp",
+           erc20.block_number,
+           erc20.index,
+           erc20.hash,
+           'Erc20Transfer'::text AS type,
+           crc_all_signups."user",
+           CASE
+               WHEN erc20."from" = crc_all_signups."user" AND erc20."to" = crc_all_signups."user" THEN crc_all_signups."user"
+               WHEN erc20."from" = crc_all_signups."user" THEN erc20."to"
+               ELSE erc20."from"
+               END             AS contact_address,
+           CASE
+               WHEN erc20."from" = crc_all_signups."user" AND erc20."to" = crc_all_signups."user" THEN 'self'::text
+               WHEN erc20."from" = crc_all_signups."user" THEN 'out'::text
+               ELSE 'in'::text
+               END             AS direction,
+           erc20.value::text,
+           row_to_json(erc20.*)  AS obj
+    FROM formatted_erc20_transfer erc20
+             JOIN crc_all_signups ON crc_all_signups."user" = erc20."from" OR crc_all_signups."user" = erc20."to"
+             LEFT JOIN crc_Signup_2 s on s.token = erc20.token
+    WHERE s.token is null
+    UNION ALL
+    SELECT seth."timestamp",
+           seth.block_number,
+           seth.index,
+           seth.hash,
+           'GnosisSafeEthTransfer'::text AS type,
+           crc_all_signups."user",
+           CASE
+               WHEN seth."from" = crc_all_signups."user" AND seth."to" = crc_all_signups."user" THEN crc_all_signups."user"
+               WHEN seth."from" = crc_all_signups."user" THEN seth."to"
+               ELSE seth."from"
+               END             AS contact_address,
+           CASE
+               WHEN seth."from" = crc_all_signups."user" AND seth."to" = crc_all_signups."user" THEN 'self'::text
+               WHEN seth."from" = crc_all_signups."user" THEN 'out'::text
+               ELSE 'in'::text
+               END                       AS direction,
+           seth.value::text,
+           row_to_json(seth.*)           AS obj
+    FROM formatted_gnosis_safe_eth_transfer seth
+             JOIN crc_all_signups ON crc_all_signups."user" = seth."from" OR crc_all_signups."user" = seth."to"
+)
+SELECT st."timestamp",
+       st.block_number,
+       st.index  AS transaction_index,
+       st.hash   AS transaction_hash,
+       st.type,
+       st."user" AS safe_address,
+       st.contact_address,
+       st.direction,
+       st.value,
+       st.obj
+FROM safe_timeline st;
 
