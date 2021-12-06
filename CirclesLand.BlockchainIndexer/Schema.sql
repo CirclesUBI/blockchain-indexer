@@ -910,7 +910,7 @@ SELECT st."timestamp",
 FROM safe_timeline st;
 
 -- v3
-select number, hash, timestamp, total_transaction_count, null::timestamp as selected_at, null::timestamp as imported_at
+select number, hash, timestamp, total_transaction_count, null::timestamp as selected_at, null::timestamp as imported_at, null::boolean as already_available
 into _block_staging
 from block
 limit 0;
@@ -1745,7 +1745,7 @@ as
     select timestamp, block_number, index, hash, "from", "to", token, value::text
     from crc_minting_2;
 
-
+drop view crc_safe_timeline_2;
 create or replace view crc_safe_timeline_2 (timestamp, block_number, transaction_index, transaction_hash, type, safe_address, contact_address, direction, value, obj) as
 WITH safe_timeline AS (
     SELECT cs."timestamp",
