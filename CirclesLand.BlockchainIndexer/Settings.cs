@@ -11,6 +11,7 @@ namespace CirclesLand.BlockchainIndexer
         public static readonly string RpcEndpointUrl;
         public static readonly string WebsocketServerUrl;
 
+        public static readonly long StartFromBlock;
         public static readonly int UseBulkSourceThreshold;
         /// <summary>
         /// Specifies after how many imported blocks the import_from_staging_tables() procedure should be called.
@@ -38,14 +39,27 @@ namespace CirclesLand.BlockchainIndexer
 
         private static readonly Dictionary<string, string> InvalidSettings = new();
         private static readonly Dictionary<string, (string, bool)> ValidSettings = new();
-        
+
         static int TryGetIntEnvVar(string variableName, int defaultValue)
         {
             var val = Environment.GetEnvironmentVariable(variableName);
             var isInt = int.TryParse(val?.Trim(), out var i);
             if (val != null && !isInt)
             {
-                InvalidSettings.Add(variableName, val ?? "null");
+                InvalidSettings.Add(variableName, val);
+            }
+            var returnVal = isInt ? i : defaultValue;
+            ValidSettings.Add(variableName, (returnVal.ToString(), val == null));
+            return returnVal;
+        }
+
+        static long TryGetLongEnvVar(string variableName, long defaultValue)
+        {
+            var val = Environment.GetEnvironmentVariable(variableName);
+            var isInt = long.TryParse(val?.Trim(), out var i);
+            if (val != null && !isInt)
+            {
+                InvalidSettings.Add(variableName, val);
             }
             var returnVal = isInt ? i : defaultValue;
             ValidSettings.Add(variableName, (returnVal.ToString(), val == null));
@@ -114,6 +128,7 @@ namespace CirclesLand.BlockchainIndexer
             WriteToStagingBatchSize = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_SIZE", 2000);
             WriteToStagingBatchMaxIntervalInSeconds = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_MAX_INTERVAL_IN_SECONDS", 5);
             MaxWriteToStagingBatchBufferSize = TryGetIntEnvVar("MAX_WRITE_TO_STAGING_BATCH_BUFFER_SIZE", 25);
+            StartFromBlock = TryGetLongEnvVar("START_FROM_BLOCK", 12529458L);
 
             Console.WriteLine("Configuration: ");
             Console.WriteLine("-------------------------------------------");

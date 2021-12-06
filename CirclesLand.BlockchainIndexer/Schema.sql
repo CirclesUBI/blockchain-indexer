@@ -1905,3 +1905,41 @@ SELECT st."timestamp",
        st.obj
 FROM safe_timeline st;
 
+
+create or replace view crc_current_trust_2
+as
+SELECT lte.address AS "user",
+       cs_a.token  AS user_token,
+       lte.can_send_to,
+       cs_b.token  AS can_send_to_token,
+       ct."limit",
+       lte.history_count,
+       ct.timestamp as last_change
+FROM (SELECT max(crc_trust_2.block_number) AS block_number, -- Todo: This must be max. block_number and max. index within that block
+             count(crc_trust_2.hash) AS history_count,
+             crc_trust_2.address,
+             crc_trust_2.can_send_to
+      FROM crc_trust_2
+      GROUP BY crc_trust_2.address
+             , crc_trust_2.can_send_to
+     ) lte
+         JOIN crc_trust_2 ct ON lte.block_number = ct.block_number
+         JOIN crc_all_signups cs_a ON lte.address = cs_a."user"
+         JOIN crc_all_signups cs_b ON lte.can_send_to = cs_b."user";
+
+create view crc_safe_accepted_crc
+as
+with all_events as (
+    select t.timestamp, t.can_send_to safe_address, s.token accepted_token, s."user" accepted_token_owner,  "limit"
+    from crc_trust_2 t
+             join crc_signup_2 s on s."user" = t.address
+), latest_events as (
+    select max(timestamp) as last_change, safe_address, accepted_token, accepted_token_owner
+    from all_events
+    group by safe_address, accepted_token, accepted_token_owner
+)
+select t.timestamp, l.safe_address, l.accepted_token, l.accepted_token_owner, t."limit"
+from latest_events l
+         join crc_trust_2 t on l.last_change = t.timestamp
+    and t.can_send_to = l.safe_address
+    and t.address = l.accepted_token_owner;

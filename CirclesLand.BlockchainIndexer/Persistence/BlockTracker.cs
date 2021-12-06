@@ -8,7 +8,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
 {
     public class BlockTracker
     {
-        public static long GetLastValidBlock(NpgsqlConnection connection)
+        public static long GetLastValidBlock(NpgsqlConnection connection, long defaultBlockNo)
         {
             var lastKnownBlock = connection.QuerySingleOrDefault<long?>(
                 @"with a as (
@@ -27,7 +27,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                     )
                     select coalesce(min(c.requested), (select max(number) from block)) - 1 as last_correctly_imported_block
                     from c
-                    where actual is null;") ?? 12529458L;
+                    where actual is null;") ?? defaultBlockNo;
 
             return lastKnownBlock;
         }
