@@ -393,7 +393,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 writer.Write(t.Transaction.Value.Value.ToString(), NpgsqlDbType.Text);
                 writer.Write(t.Transaction.Input, NpgsqlDbType.Text);
                 writer.Write(t.Transaction.Nonce.ToString(), NpgsqlDbType.Text);
-                writer.Write(t.Transaction.Type.ToString(), NpgsqlDbType.Text);
+                writer.Write(t.Transaction.Type?.ToString() ?? "0", NpgsqlDbType.Text);
                 writer.Write(classificationArray, NpgsqlDbType.Array | NpgsqlDbType.Text);
 
                 rowCount++;

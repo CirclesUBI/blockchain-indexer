@@ -74,12 +74,10 @@ namespace CirclesLand.BlockchainIndexer
                         .GetBlockNumber
                         .SendRequestAsync();
                     roundContext.Log($"Latest blockchain block: {currentBlock.Value}");
-
-
+                    
                     var delta = currentBlock.Value - lastPersistedBlock;
                     Source<HexBigInteger, NotUsed> source;
-
-
+                    
                     int flushEveryNthRound;
                     
                     if (delta > Settings.UseBulkSourceThreshold)
