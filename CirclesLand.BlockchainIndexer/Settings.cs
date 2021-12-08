@@ -36,6 +36,31 @@ namespace CirclesLand.BlockchainIndexer
         public static readonly int WriteToStagingBatchSize;
         public static readonly int WriteToStagingBatchMaxIntervalInSeconds;
         public static readonly int MaxWriteToStagingBatchBufferSize;
+        
+        
+        public static readonly string HubAddress;
+        public static readonly string AddressEmptyBytesPrefix = "0x000000000000000000000000";
+
+        public static readonly string CrcHubTransferEventTopic =
+            "0x8451019aab65b4193860ef723cb0d56b475a26a72b7bfc55c1dbd6121015285a";
+
+        public static readonly string CrcTrustEventTopic = "0xe60c754dd8ab0b1b5fccba257d6ebcd7d09e360ab7dd7a6e58198ca1f57cdcec";
+        public static readonly string TransferEventTopic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+        public static readonly string CrcSignupEventTopic = "0x358ba8f768af134eb5af120e9a61dc1ef29b29f597f047b555fc3675064a0342";
+        public static readonly string GnosisSafeOwnerAddedTopic = "";
+
+        public static readonly string CrcOrganisationSignupEventTopic =
+            "0xb0b94cff8b84fc67513b977d68a5cdd67550bd9b8d99a34b570e3367b7843786";
+
+        public static readonly string GnosisSafeExecutionSuccessEventTopic =
+            "0x442e715f626346e8c54381002da614f62bee8d27386535b2521ec8540898556e";
+
+        public static readonly string EmptyUInt256 = "0x0000000000000000000000000000000000000000000000000000000000000000";
+        public static readonly string EmptyAddress = "0x0000000000000000000000000000000000000000";
+        public static readonly string ExecTransactionMethodId = "0x6a761202";
+
+        public static readonly string ExecutionSuccessEventTopic =
+            "0x442e715f626346e8c54381002da614f62bee8d27386535b2521ec8540898556e";
 
         private static readonly Dictionary<string, string> InvalidSettings = new();
         private static readonly Dictionary<string, (string, bool)> ValidSettings = new();
@@ -50,6 +75,14 @@ namespace CirclesLand.BlockchainIndexer
             }
             var returnVal = isInt ? i : defaultValue;
             ValidSettings.Add(variableName, (returnVal.ToString(), val == null));
+            return returnVal;
+        }
+
+        static string TryGetStringEnvVar(string variableName, string defaultValue)
+        {
+            var val = Environment.GetEnvironmentVariable(variableName);
+            var returnVal = val ?? defaultValue;
+            ValidSettings.Add(variableName, (returnVal, val == null));
             return returnVal;
         }
 
@@ -129,12 +162,14 @@ namespace CirclesLand.BlockchainIndexer
             WriteToStagingBatchMaxIntervalInSeconds = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_MAX_INTERVAL_IN_SECONDS", 5);
             MaxWriteToStagingBatchBufferSize = TryGetIntEnvVar("MAX_WRITE_TO_STAGING_BATCH_BUFFER_SIZE", 25);
             StartFromBlock = TryGetLongEnvVar("START_FROM_BLOCK", 12529458L);
+            HubAddress = TryGetStringEnvVar("HUB_ADDRESS", "0x29b9a7fbb8995b2423a71cc17cf9810798f6c543");
+            
 
             Console.WriteLine("Configuration: ");
             Console.WriteLine("-------------------------------------------");
             foreach (var (key, value) in InvalidSettings)
             {
-                Console.WriteLine($"ERR: The value of environment variable '{key}' is invalid (not an integer): {value}");
+                Console.WriteLine($"ERR: The value of environment variable '{key}' is invalid: {value}");
             }
 
             if (InvalidSettings.Count > 0)

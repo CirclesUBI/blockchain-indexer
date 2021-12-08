@@ -19,30 +19,6 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             return (IEnumerable<string>?)topicsArray?.Values<string>().Where(o => o != null) ?? Array.Empty<string>();
         }
         
-        public const string HubAddress = "0x29b9a7fbb8995b2423a71cc17cf9810798f6c543";
-        public const string AddressEmptyBytesPrefix = "0x000000000000000000000000";
-
-        public const string CrcHubTransferEventTopic =
-            "0x8451019aab65b4193860ef723cb0d56b475a26a72b7bfc55c1dbd6121015285a";
-
-        public const string CrcTrustEventTopic = "0xe60c754dd8ab0b1b5fccba257d6ebcd7d09e360ab7dd7a6e58198ca1f57cdcec";
-        public const string TransferEventTopic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-        public const string CrcSignupEventTopic = "0x358ba8f768af134eb5af120e9a61dc1ef29b29f597f047b555fc3675064a0342";
-        public const string GnosisSafeOwnerAddedTopic = "";
-
-        public const string CrcOrganisationSignupEventTopic =
-            "0xb0b94cff8b84fc67513b977d68a5cdd67550bd9b8d99a34b570e3367b7843786";
-
-        public const string GnosisSafeExecutionSuccessEventTopic =
-            "0x442e715f626346e8c54381002da614f62bee8d27386535b2521ec8540898556e";
-
-        public const string EmptyUInt256 = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        public const string EmptyAddress = "0x0000000000000000000000000000000000000000";
-        public const string ExecTransactionMethodId = "0x6a761202";
-
-        public const string ExecutionSuccessEventTopic =
-            "0x442e715f626346e8c54381002da614f62bee8d27386535b2521ec8540898556e";
-
         /// <summary>
         /// A crc signup transaction always has three logs: Signup, Trust and Transfer.
         /// </summary>
@@ -63,7 +39,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             // Decode and check the Signup-log
             //
             var signupLog = receipt.Logs.SingleOrDefault(log =>
-                GetTopics(log).Contains(CrcSignupEventTopic));
+                GetTopics(log).Contains(Settings.CrcSignupEventTopic));
 
             if (signupLog == null)
             {
@@ -71,7 +47,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             }
 
             var signupLogAddress = signupLog.Value<string>("address");
-            if (signupLogAddress != HubAddress)
+            if (signupLogAddress != Settings.HubAddress)
             {
                 return false;
             }
@@ -82,8 +58,8 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                 return false;
             }
 
-            userAddress = signupLogTopics[1].Replace(AddressEmptyBytesPrefix, "0x");
-            tokenAddress = signupLog.Value<string>("data")?.Replace(AddressEmptyBytesPrefix, "0x");
+            userAddress = signupLogTopics[1].Replace(Settings.AddressEmptyBytesPrefix, "0x");
+            tokenAddress = signupLog.Value<string>("data")?.Replace(Settings.AddressEmptyBytesPrefix, "0x");
 
             //
             // Decode and check the Trust-log
@@ -131,7 +107,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                 return false;
             }
 
-            if (from != EmptyAddress)
+            if (from != Settings.EmptyAddress)
             {
                 return false;
             }
@@ -157,13 +133,13 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
 
             var topics = GetTopics(logEntry).ToArray();
 
-            if (!topics.Contains(CrcOrganisationSignupEventTopic))
+            if (!topics.Contains(Settings.CrcOrganisationSignupEventTopic))
             {
                 return false;
             }
 
             var organisationSignupLogAddress = logEntry.Value<string>("address");
-            if (organisationSignupLogAddress != HubAddress)
+            if (organisationSignupLogAddress != Settings.HubAddress)
             {
                 return false;
             }
@@ -173,7 +149,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                 return false;
             }
 
-            organisationAddress = topics[1].Replace(AddressEmptyBytesPrefix, "0x");
+            organisationAddress = topics[1].Replace(Settings.AddressEmptyBytesPrefix, "0x");
 
             return true;
         }
@@ -189,7 +165,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             amount = null;
 
             var hubTransferLog = receipt.Logs.SingleOrDefault(log =>
-                GetTopics(log).Contains(CrcHubTransferEventTopic));
+                GetTopics(log).Contains(Settings.CrcHubTransferEventTopic));
 
             if (hubTransferLog == null)
             {
@@ -197,7 +173,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             }
 
             var hubTransferLogAddress = hubTransferLog.Value<string>("address");
-            if (hubTransferLogAddress != HubAddress)
+            if (hubTransferLogAddress != Settings.HubAddress)
             {
                 return false;
             }
@@ -208,9 +184,9 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                 return false;
             }
 
-            from = hubTransferLogTopics[1].Replace(AddressEmptyBytesPrefix, "0x");
-            to = hubTransferLogTopics[2].Replace(AddressEmptyBytesPrefix, "0x");
-            var amountStr = hubTransferLog.Value<string>("data")?.Replace(AddressEmptyBytesPrefix, "0x");
+            from = hubTransferLogTopics[1].Replace(Settings.AddressEmptyBytesPrefix, "0x");
+            to = hubTransferLogTopics[2].Replace(Settings.AddressEmptyBytesPrefix, "0x");
+            var amountStr = hubTransferLog.Value<string>("data")?.Replace(Settings.AddressEmptyBytesPrefix, "0x");
             if (amountStr != null)
             {
                 amount = new HexBigInteger(amountStr);
@@ -233,13 +209,13 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
 
             var topics = GetTopics(logEntry).ToArray();
 
-            if (!topics.Contains(CrcTrustEventTopic))
+            if (!topics.Contains(Settings.CrcTrustEventTopic))
             {
                 return false;
             }
 
             var trustLogAddress = logEntry.Value<string>("address");
-            if (trustLogAddress != HubAddress)
+            if (trustLogAddress != Settings.HubAddress)
             {
                 return false;
             }
@@ -249,8 +225,8 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
                 return false;
             }
 
-            canSendTo = topics[1].Replace(AddressEmptyBytesPrefix, "0x");
-            user = topics[2].Replace(AddressEmptyBytesPrefix, "0x");
+            canSendTo = topics[1].Replace(Settings.AddressEmptyBytesPrefix, "0x");
+            user = topics[2].Replace(Settings.AddressEmptyBytesPrefix, "0x");
             limit = new HexBigInteger(logEntry.Value<string>("data"));
 
             if (limit.Value < 0 || limit.Value > 100)
@@ -276,7 +252,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
 
             var topics = GetTopics(logEntry).ToArray();
 
-            if (!topics.Contains(TransferEventTopic))
+            if (!topics.Contains(Settings.TransferEventTopic))
             {
                 return false;
             }
@@ -287,9 +263,9 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             }
 
             tokenAddress = logEntry.Value<string>("address");
-            from = topics[1].Replace(AddressEmptyBytesPrefix, "0x");
-            to = topics[2].Replace(AddressEmptyBytesPrefix, "0x");
-            var valueStr = logEntry.Value<string>("data")?.Replace(AddressEmptyBytesPrefix, "0x");
+            from = topics[1].Replace(Settings.AddressEmptyBytesPrefix, "0x");
+            to = topics[2].Replace(Settings.AddressEmptyBytesPrefix, "0x");
+            var valueStr = logEntry.Value<string>("data")?.Replace(Settings.AddressEmptyBytesPrefix, "0x");
             if (valueStr != null)
             {
                 value = new HexBigInteger(valueStr);
@@ -311,7 +287,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             to = null;
             value = null;
 
-            if (!transaction.Input.StartsWith(ExecTransactionMethodId))
+            if (!transaction.Input.StartsWith(Settings.ExecTransactionMethodId))
             {
                 return false;
             }
@@ -355,7 +331,7 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
             }
             
             var executionSuccessLog = receipt.Logs.SingleOrDefault(log =>
-                GetTopics(log).Contains(ExecutionSuccessEventTopic));
+                GetTopics(log).Contains(Settings.ExecutionSuccessEventTopic));
             
             return executionSuccessLog != null;
         }

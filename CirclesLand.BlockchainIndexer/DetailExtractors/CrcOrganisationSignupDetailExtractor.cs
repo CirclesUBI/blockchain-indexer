@@ -11,13 +11,13 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
         public static IEnumerable<IDetail> Extract(Transaction transactionData, TransactionReceipt receipt)
         {
             var log = receipt.Logs
-                .FirstOrDefault(o => TransactionClassifier.GetTopics(o).Contains(TransactionClassifier.CrcOrganisationSignupEventTopic));
+                .FirstOrDefault(o => TransactionClassifier.GetTopics(o).Contains(Settings.CrcOrganisationSignupEventTopic));
 
             if (log == null)
             {
                 throw new Exception("The supplied transaction is not a valid CRC 'organization signup' " +
                                     "transaction because it misses a log entry with " +
-                                    $"topic {TransactionClassifier.CrcOrganisationSignupEventTopic}.");
+                                    $"topic {Settings.CrcOrganisationSignupEventTopic}.");
             }
 
             var isCrcOrganisationSignup =
