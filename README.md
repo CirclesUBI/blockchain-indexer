@@ -14,6 +14,7 @@ Indexes all Circles related transactions on the xDai blockchain from block 12529
       -p"8675:8675" \
       ghcr.io/circlesland/blockchain-indexer:[IMAGE_VERSION]
    ```
+The configuration can be changed further with environment variables. See [Settings.cs](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/Settings.cs) for more information.
 
 ## Indexed events
 * crc_hub_transfer
@@ -91,9 +92,9 @@ The "requested_blocks"-table is written by any indexer-instance directly after i
 Missing blocks are catched-up until the index is in-sync with the rpc-gateway.
 
 The [import_from_staging()](https://github.com/circlesland/blockchain-indexer/blob/0aba70b57e5702292b684a1603258bdf0fd64747/CirclesLand.BlockchainIndexer/Schema.sql#L956) executes the following steps:  
-1) Mark rows in staging tables:
-   1.1) All rows that form a complete block (number of distinct transactions equals the block's total_transaction_count) as "selected".
-   1.2) All rows that already exist in the indexed tables as "already_available".
+1) Mark rows in staging tables:  
+   1.1) All rows that form a complete block (number of distinct transactions equals the block's total_transaction_count) as "selected".  
+   1.2) All rows that already exist in the indexed tables as "already_available".  
 2) Import all distinct "selected" rows into their final table
 3) Mark all "selected" and "already_available" staging-blocks as "imported"  
 
@@ -104,7 +105,6 @@ In the service:
 There is no built in mechanism for health checks but it should be easy to listen to the transaction hashes and define a timeout and alert after N-seconds without new transactions.
 
 ## Known issues
-* Initially puts heavy load on the rpc-gateway because it downloads all blocks with 24 parallel connections and receipts with 96 parallel connections (should be replaced with direct ingest from a geth/netermind/etc. db)
-* Not configurable yet. Settings are baked into [Settings.cs](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/Settings.cs) and the software needs to be recompiled 
+* Initially puts heavy load on the rpc-gateway because it downloads all blocks with 24 parallel connections (configurable) and receipts with 96 parallel connections (configurable) (should be replaced with direct ingest from a geth/netermind/etc. db)
 * Doesn't validate blocks
 * Uses a lot of threadpool threads and waits for some of them somewhere. This can cause thread pool starvation during the bulk import. 4 cores are adviced during this phase.
