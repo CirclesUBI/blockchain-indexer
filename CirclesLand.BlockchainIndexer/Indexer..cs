@@ -48,7 +48,7 @@ namespace CirclesLand.BlockchainIndexer
             while (!cancellationToken.IsCancellationRequested)
             {
                 var roundContext = instanceContext.CreateRoundContext();
-
+                
                 try
                 {
                     var roundStartsIn = roundContext.StartAt - DateTime.Now;
@@ -74,12 +74,12 @@ namespace CirclesLand.BlockchainIndexer
                         .GetBlockNumber
                         .SendRequestAsync();
                     roundContext.Log($"Latest blockchain block: {currentBlock.Value}");
-
+                    
                     var delta = currentBlock.Value - lastPersistedBlock;
                     Source<HexBigInteger, NotUsed> source;
-
+                    
                     int flushEveryNthRound;
-
+                    
                     if (delta > Settings.UseBulkSourceThreshold)
                     {
                         roundContext.Log($"Found {delta} blocks to catch up. Using the 'BulkSource'.");
@@ -88,7 +88,7 @@ namespace CirclesLand.BlockchainIndexer
                         source = roundContext.SourceFactory.CreateBulkSource(
                             new HexBigInteger(lastPersistedBlock)
                             , currentBlock);
-
+                        
                         flushEveryNthRound = Settings.BulkFlushInterval;
                     }
                     else
@@ -101,7 +101,7 @@ namespace CirclesLand.BlockchainIndexer
                     }
 
                     // roundContext.Log($"Starting with source {source?.GetType()?.Name ?? "<null>"}");
-
+                    
                     await source
                         .Select(o =>
                         {
@@ -125,6 +125,7 @@ namespace CirclesLand.BlockchainIndexer
                             if (t.Length == 0)
                             {
                                 BlockTracker.InsertEmptyBlock(roundContext.Connection, block);
+                                CompleteBatch(flushEveryNthRound, roundContext);
                             }
 
                             var transactions = t
@@ -184,7 +185,7 @@ namespace CirclesLand.BlockchainIndexer
                             var signups = extractedDetails
                                 .Where(o => o is CrcSignup)
                                 .Cast<CrcSignup>();
-
+                            
                             foreach (var signup in signups)
                             {
                                 var contract = roundContext.Web3.Eth.GetContract(
@@ -193,11 +194,11 @@ namespace CirclesLand.BlockchainIndexer
                                 var owners = await function.CallAsync<List<string>>();
                                 signup.Owners = owners?.Select(o => o.ToLower()).ToArray() ?? Array.Empty<string>();
                             }
-
+                            
                             var organisationSignups = extractedDetails
                                 .Where(o => o is CrcOrganisationSignup)
                                 .Cast<CrcOrganisationSignup>();
-
+                            
                             foreach (var organisationSignup in organisationSignups)
                             {
                                 var contract = roundContext.Web3.Eth.GetContract(
@@ -206,7 +207,7 @@ namespace CirclesLand.BlockchainIndexer
                                 var owners = await function.CallAsync<List<string>>();
                                 organisationSignup.Owners = owners.Select(o => o.ToLower()).ToArray();
                             }
-
+                            
                             return (
                                 TotalTransactionsInBlock: classifiedTransactions.TotalTransactionsInBlock,
                                 TxHash: classifiedTransactions.Transaction.TransactionHash,
@@ -225,33 +226,12 @@ namespace CirclesLand.BlockchainIndexer
                             roundContext.Log($" Writing batch to staging tables ..");
 
                             var txArr = transactionsWithExtractedDetails.ToArray();
-
+                            
                             TransactionsWriter.WriteTransactions(
                                 roundContext.Connection,
                                 txArr);
 
-                            string[] writtenTransactions = { };
-                            if (Statistics.TotalProcessedBatches % flushEveryNthRound == 0)
-                            {
-                                roundContext.Log($" Importing from staging tables ..");
-                                ImportProcedure.ImportFromStaging(roundContext.Connection
-                                    , Mode == IndexerMode.CatchUp
-                                        ? Settings.BulkFlushTimeoutInSeconds
-                                        : Settings.SerialFlushTimeoutInSeconds);
-
-                                roundContext.Log($" Cleaning staging tables ..");
-                                writtenTransactions = StagingTables.CleanImported(roundContext.Connection);
-                            }
-
-                            if ((Mode == IndexerMode.Polling || Mode == IndexerMode.Live)
-                                && writtenTransactions.Length > 0)
-                            {
-                                roundContext.OnBatchSuccessNotify(writtenTransactions);
-                            }
-                            else
-                            {
-                                roundContext.OnBatchSuccess();
-                            }
+                            CompleteBatch(flushEveryNthRound, roundContext);
                         }, materializer);
 
                     Logger.Log($"Completed the stream. Restarting ..");
@@ -260,10 +240,32 @@ namespace CirclesLand.BlockchainIndexer
                 {
                     roundContext.OnError(ex);
                 }
-                finally
-                {
-                    roundContext.Dispose();
-                }
+            }
+        }
+
+        private void CompleteBatch(int flushEveryNthRound, RoundContext roundContext)
+        {
+            string[] writtenTransactions = { };
+            if (Statistics.TotalProcessedBatches % flushEveryNthRound == 0)
+            {
+                roundContext.Log($" Importing from staging tables ..");
+                ImportProcedure.ImportFromStaging(roundContext.Connection
+                    , Mode == IndexerMode.CatchUp
+                        ? Settings.BulkFlushTimeoutInSeconds
+                        : Settings.SerialFlushTimeoutInSeconds);
+
+                roundContext.Log($" Cleaning staging tables ..");
+                writtenTransactions = StagingTables.CleanImported(roundContext.Connection);
+            }
+
+            if ((Mode == IndexerMode.Polling || Mode == IndexerMode.Live)
+                && writtenTransactions.Length > 0)
+            {
+                roundContext.OnBatchSuccessNotify(writtenTransactions);
+            }
+            else
+            {
+                roundContext.OnBatchSuccess();
             }
         }
     }

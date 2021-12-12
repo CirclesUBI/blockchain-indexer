@@ -8,6 +8,8 @@ namespace CirclesLand.BlockchainIndexer.Persistence
 {
     public class BlockTracker
     {
+        public static int UnflushedEmptyBlocks = 0;
+        
         public static long GetLastValidBlock(NpgsqlConnection connection, long defaultBlockNo)
         {
             var lastKnownBlock = connection.QuerySingleOrDefault<long?>(
@@ -58,6 +60,8 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                     hash = block.BlockHash,
                     timestamp = blockTimestampDateTime
                 });
+
+            UnflushedEmptyBlocks++;
         }
     }
 }
