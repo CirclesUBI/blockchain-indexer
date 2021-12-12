@@ -13,6 +13,13 @@ namespace CirclesLand.BlockchainIndexer.Server
     {
         public static async Task Main(string[] args)
         {
+            if (Settings.DelayStartup > 0)
+            {
+                Console.WriteLine($"Start is delayed for {Settings.DelayStartup} seconds.");
+                await Task.Delay(Settings.DelayStartup * 1000);
+            }
+            
+            
             // This is O.K. because all dates are UTC
             AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
             

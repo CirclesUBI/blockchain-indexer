@@ -10,6 +10,8 @@ namespace CirclesLand.BlockchainIndexer
         public static readonly string ConnectionString;
         public static readonly string RpcEndpointUrl;
         public static readonly string WebsocketServerUrl;
+        
+        public static readonly int DelayStartup;
 
         public static readonly long StartFromBlock;
         public static readonly int UseBulkSourceThreshold;
@@ -163,6 +165,7 @@ namespace CirclesLand.BlockchainIndexer
             MaxWriteToStagingBatchBufferSize = TryGetIntEnvVar("MAX_WRITE_TO_STAGING_BATCH_BUFFER_SIZE", 25);
             StartFromBlock = TryGetLongEnvVar("START_FROM_BLOCK", 12529458L);
             HubAddress = TryGetStringEnvVar("HUB_ADDRESS", "0x29b9a7fbb8995b2423a71cc17cf9810798f6c543");
+            DelayStartup = TryGetIntEnvVar("DELAY_START", 0);
             
 
             Console.WriteLine("Configuration: ");
