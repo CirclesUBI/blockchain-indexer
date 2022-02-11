@@ -25,8 +25,7 @@ namespace KestrelWebSocketServer
             // enable websocket support
             app.UseWebSockets(new WebSocketOptions
             {
-                KeepAliveInterval = TimeSpan.FromSeconds(120),
-                ReceiveBufferSize = 4 * 1024
+                KeepAliveInterval = TimeSpan.FromSeconds(120)
             });
 
             // add our custom middleware to the pipeline

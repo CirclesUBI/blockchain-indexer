@@ -6,13 +6,13 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Akka.Streams" Version="1.4.24" />
-      <PackageReference Include="Dapper" Version="2.0.90" />
-      <PackageReference Include="Microsoft.Extensions.Hosting" Version="5.0.0" />
-      <PackageReference Include="Nethereum.Hex" Version="4.0.5" />
-      <PackageReference Include="Nethereum.JsonRpc.WebSocketClient" Version="4.0.5" />
-      <PackageReference Include="Nethereum.Web3" Version="4.0.4" />
-      <PackageReference Include="Npgsql" Version="6.0.0-preview7" />
+      <PackageReference Include="Akka.Streams" Version="1.4.32" />
+      <PackageReference Include="Dapper" Version="2.0.123" />
+      <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
+      <PackageReference Include="Nethereum.Hex" Version="4.1.1" />
+      <PackageReference Include="Nethereum.JsonRpc.WebSocketClient" Version="4.1.1" />
+      <PackageReference Include="Nethereum.Web3" Version="4.1.1" />
+      <PackageReference Include="Npgsql" Version="6.0.3" />
     </ItemGroup>
 
     <ItemGroup>
