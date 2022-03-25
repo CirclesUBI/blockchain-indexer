@@ -1943,3 +1943,24 @@ from latest_events l
          join crc_trust_2 t on l.last_change = t.timestamp
     and t.can_send_to = l.safe_address
     and t.address = l.accepted_token_owner;
+
+drop view crc_current_trust_2;
+create view crc_current_trust_2
+            ("user", user_token, can_send_to, can_send_to_token, "limit", history_count, last_change) as
+SELECT lte.address    AS "user",
+       cs_a.token     AS user_token,
+       lte.can_send_to,
+       cs_b.token     AS can_send_to_token,
+       ct."limit",
+       lte.history_count,
+       ct."timestamp" AS last_change
+FROM (SELECT max(crc_trust_2.block_number) AS block_number,
+             max(crc_trust_2.index)        AS index,
+             count(crc_trust_2.hash)       AS history_count,
+             crc_trust_2.address,
+             crc_trust_2.can_send_to
+      FROM crc_trust_2
+      GROUP BY crc_trust_2.address, crc_trust_2.can_send_to) lte
+         JOIN crc_trust_2 ct ON lte.block_number = ct.block_number and lte.index = ct.index
+         JOIN crc_all_signups cs_a ON lte.address = cs_a."user"
+         JOIN crc_all_signups cs_b ON lte.can_send_to = cs_b."user";
