@@ -158,11 +158,13 @@ namespace CirclesLand.BlockchainIndexer
                         // Classify all transactions
                         .Select(transactionAndReceipt =>
                         {
-                            var classification = TransactionClassifier.Classify(
-                                transactionAndReceipt.Transaction,
-                                transactionAndReceipt.Receipt,
-                                null);
-
+                            var classification = transactionAndReceipt.Receipt == null
+                                ? TransactionClass.Unknown
+                                : TransactionClassifier.Classify(
+                                    transactionAndReceipt.Transaction,
+                                    transactionAndReceipt.Receipt,
+                                    null);
+                            
                             return (
                                 TotalTransactionsInBlock: transactionAndReceipt.TotalTransactionsInBlock,
                                 Timestamp: transactionAndReceipt.Timestamp,
