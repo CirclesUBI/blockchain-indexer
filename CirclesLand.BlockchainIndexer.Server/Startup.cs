@@ -11,6 +11,7 @@ namespace CirclesLand.BlockchainIndexer.Server
         {
             // register our custom middleware since we use the IMiddleware factory approach
             services.AddTransient<WebsocketService>();
+            services.AddTransient<HealthService>();
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -24,6 +25,7 @@ namespace CirclesLand.BlockchainIndexer.Server
             });
 
             // add our custom middleware to the pipeline
+            app.UseMiddleware<HealthService>();
             app.UseMiddleware<WebsocketService>();
         }
     }

@@ -8,6 +8,7 @@ using Akka.Actor;
 using Akka.Streams;
 using Akka.Streams.Dsl;
 using CirclesLand.BlockchainIndexer.ABIs;
+using CirclesLand.BlockchainIndexer.Api;
 using CirclesLand.BlockchainIndexer.DetailExtractors;
 using CirclesLand.BlockchainIndexer.Persistence;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
@@ -105,6 +106,7 @@ namespace CirclesLand.BlockchainIndexer
                     await source
                         .Select(o =>
                         {
+                            HealthService.ReportStartImportBlock(o.ToLong());
                             BlockTracker.AddRequested(roundContext.Connection, o.ToLong());
                             return o;
                         })
@@ -261,7 +263,9 @@ namespace CirclesLand.BlockchainIndexer
                 roundContext.Log($" Cleaning staging tables ..");
                 writtenTransactions = StagingTables.CleanImported(roundContext.Connection);
             }
-
+            
+            HealthService.ReportCompleteBatch();
+            
             if ((Mode == IndexerMode.Polling || Mode == IndexerMode.Live)
                 && writtenTransactions.Length > 0)
             {
