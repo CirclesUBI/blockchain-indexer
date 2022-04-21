@@ -1,6 +1,4 @@
-using System;
 using Dapper;
-using Newtonsoft.Json;
 using Npgsql;
 
 namespace CirclesLand.BlockchainIndexer.Persistence

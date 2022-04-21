@@ -4,6 +4,6 @@ namespace CirclesLand.BlockchainIndexer.TransactionDetailModels
     {
         public string? Address { get; set; }
         public string? CanSendTo { get; set; }
-        public long? Limit { get; set; }
+        public long Limit { get; set; }
     }
 }

@@ -1,139 +1,72 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
+using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
-using CirclesLand.BlockchainIndexer.Api;
-using CirclesLand.BlockchainIndexer.Util;
-using Dapper;
-using KestrelWebSocketServer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Npgsql;
-using DotNetHost = Microsoft.Extensions.Hosting.Host;
 
 namespace CirclesLand.BlockchainIndexer.Server
 {
     public class Program
     {
-        public static string ConnectionString { get; private set; }
-        public static string RpcGatewayUrl { get; private set; }
-        public static string HostId { get; private set; }
-
         public static async Task Main(string[] args)
         {
-            HostId = Guid.NewGuid().ToString("N");
-            var validationErrors = new List<string>();
-            var connectionString = Environment.GetEnvironmentVariable("INDEXER_CONNECTION_STRING");
-            try
+            if (Settings.DelayStartup > 0)
             {
-                var csb = new NpgsqlConnectionStringBuilder(connectionString);
-                if (string.IsNullOrWhiteSpace(csb.Host))
-                    validationErrors.Add("The connection string contains no 'Server'");
-                if (string.IsNullOrWhiteSpace(csb.Username))
-                    validationErrors.Add("The connection string contains no 'User ID'");
-                if (string.IsNullOrWhiteSpace(csb.Database))
-                    validationErrors.Add("The connection string contains no 'Database'");
-
-                ConnectionString = connectionString;
+                Console.WriteLine($"Start is delayed for {Settings.DelayStartup} seconds.");
+                await Task.Delay(Settings.DelayStartup * 1000);
             }
-            catch (Exception ex)
-            {
-                validationErrors.Add("The connection string is not valid:");
-                validationErrors.Add(ex.Message);
-            }
-
-            if (!Uri.TryCreate(Environment.GetEnvironmentVariable("INDEXER_RPC_GATEWAY_URL"), UriKind.Absolute, 
-                out var rpcGatewayUri))
-            {
-                validationErrors.Add("Couldn't parse the 'INDEXER_RPC_GATEWAY_URL' environment variable. Expected 'System.Uri'.");
-            }
-            else
-            {
-                RpcGatewayUrl = rpcGatewayUri.ToString();
-            }
-            if (!Uri.TryCreate(Environment.GetEnvironmentVariable("INDEXER_WEBSOCKET_URL"), UriKind.Absolute,
-                out var websocketUrl))
-            {
-                validationErrors.Add("Couldn't parse the 'INDEXER_WEBSOCKET_URL' environment variable. Expected 'System.Uri'.");
-            }
-
-            if (validationErrors.Count > 0)
-            {
-                throw new ArgumentException(string.Join(Environment.NewLine, validationErrors));
-            }
-
-            Debug.Assert(rpcGatewayUri != null, nameof(rpcGatewayUri) + " != null");
-
-            Settings.ConnectionString = connectionString;
-            Settings.RpcEndpointUrl = rpcGatewayUri.ToString();
             
-            var indexer = new Indexer();
-            // TODO: Use cancellation token
-            indexer.Run();
             
+            // This is O.K. because all dates are UTC
+            AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
-            DotNetHost.CreateDefaultBuilder(args)
+            using var host = Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    webBuilder.UseUrls(@$"{websocketUrl}");
+                    webBuilder.UseUrls(@$"{Settings.WebsocketServerUrl}");
                     webBuilder.UseStartup<Startup>();
                 })
-                .Build()
-                .Run();
+                .Build();
+
+            var indexer = new Indexer();
             
-            /*
-            indexer.NewBlock += (s, e) =>
+            var cancelIndexerSource = new CancellationTokenSource();
+            
+#pragma warning disable 4014
+            indexer.Run(cancelIndexerSource.Token).ContinueWith(t =>
+#pragma warning restore 4014
             {
-                Task.Run(() =>
+                if (t.Exception != null)
                 {
-                    try
-                    {
-                        using var connection = new NpgsqlConnection(connectionString);
-                        connection.Open();
+                    Console.WriteLine(t.Exception.Message);
+                    Console.WriteLine(t.Exception.StackTrace);
+                }
 
-                        var safes = connection.Query(
-                            @"select timestamp 
-                                  , block_number::text
-                                  , transaction_index
-                                  , transaction_hash
-                                  , type
-                                  , safe_address
-                                  , direction
-                                  , value::text
-                                  , obj::text as payload
-                                 from crc_safe_timeline 
-                                 where block_number = @block_number",
-                            new
-                            {
-                                block_number = (long) e.Block.Value
-                            });
+                Console.WriteLine("CirclesLand.BlockchainIndexer.Indexer.Run() returned. Stopping the host..");
+                try
+                {
+                    cancelIndexerSource.Cancel();
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine("Cancellation order?: The Host ended before the Indexer");
+                }
+            }, cancelIndexerSource.Token);
 
-                        var changes = safes.Select(o =>
-                        {
-                            o.payload = JObject.Parse(o.payload);
-                            return o;
-                        }).ToArray();
-
-                        if (changes.Length == 0)
-                        {
-                            return;
-                        };
-                        
-                        var msg = JsonConvert.SerializeObject(changes);
-                        Logger.Log(msg);
-                        WebsocketService.BroadcastMessage(msg);
-                    }
-                    catch (Exception e)
-                    {
-                        Logger.LogError(e.Message);
-                        Logger.LogError(e.StackTrace);
-                    }
-                });
-            };
-            */
+            await host.RunAsync(cancelIndexerSource.Token);
+            
+            try
+            {
+                cancelIndexerSource.Cancel();
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("Cancellation order?: The Indexer ended before the Host");
+            }
         }
     }
 }

@@ -8,8 +8,8 @@ namespace CirclesLand.BlockchainIndexer.Persistence
     public class BlockWriter
     {
         public static int WriteBlocks(NpgsqlConnection writerConnection,
-            string? blockTableName,
-            IEnumerable<(long BlockNumber, DateTime BlockTimestamp, string Hash, int TotalTransactionCount)>? blocks)
+            string blockTableName,
+            IEnumerable<(long BlockNumber, DateTime BlockTimestamp, string Hash, int TotalTransactionCount)> blocks)
         {
             using var writer = writerConnection.BeginBinaryImport(
                 @$"COPY {blockTableName} (

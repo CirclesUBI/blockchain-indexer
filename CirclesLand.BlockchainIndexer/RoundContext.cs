@@ -51,7 +51,7 @@ namespace CirclesLand.BlockchainIndexer
 
         public long GetLastValidBlock()
         {
-            return BlockTracker.GetLastValidBlock(Connection);
+            return BlockTracker.GetLastValidBlock(Connection, Settings.StartFromBlock);
         }
 
         public void OnError(Exception exception)

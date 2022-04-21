@@ -7,7 +7,7 @@ using Npgsql;
 
 namespace CirclesLand.BlockchainIndexer
 {
-    public class InstanceContext : IDisposable
+    public class InstanceContext
     {
         private ConcurrentDictionary<long, RoundContext> _rounds = new();
 
@@ -75,10 +75,6 @@ namespace CirclesLand.BlockchainIndexer
         {
             using var connection = GetConnection();
             StagingTables.Truncate(connection);
-        }
-
-        public void Dispose()
-        {
         }
     }
 }

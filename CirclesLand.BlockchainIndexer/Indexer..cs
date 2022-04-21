@@ -8,6 +8,7 @@ using Akka.Actor;
 using Akka.Streams;
 using Akka.Streams.Dsl;
 using CirclesLand.BlockchainIndexer.ABIs;
+using CirclesLand.BlockchainIndexer.Api;
 using CirclesLand.BlockchainIndexer.DetailExtractors;
 using CirclesLand.BlockchainIndexer.Persistence;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
@@ -37,27 +38,25 @@ namespace CirclesLand.BlockchainIndexer
 
     public class Indexer
     {
-        public event EventHandler<IndexedBlockEventArgs> NewBlock;
-
         public IndexerMode Mode { get; private set; } = IndexerMode.NotRunning;
 
-        public async Task Run()
+        public async Task Run(CancellationToken cancellationToken)
         {
             var system = ActorSystem.Create("system");
             var materializer = system.Materializer();
             var instanceContext = new InstanceContext();
 
-            while (true)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 var roundContext = instanceContext.CreateRoundContext();
-
+                
                 try
                 {
                     var roundStartsIn = roundContext.StartAt - DateTime.Now;
                     if (roundStartsIn.TotalMilliseconds > 0)
                     {
                         Logger.Log($"Round {roundContext.RoundNo} starting at {roundContext.StartAt} ..");
-                        await Task.Delay(roundStartsIn);
+                        await Task.Delay(roundStartsIn, cancellationToken);
                     }
 
                     roundContext.Log($"Round {roundContext.RoundNo} started at {DateTime.Now}.");
@@ -76,12 +75,10 @@ namespace CirclesLand.BlockchainIndexer
                         .GetBlockNumber
                         .SendRequestAsync();
                     roundContext.Log($"Latest blockchain block: {currentBlock.Value}");
-
-
+                    
                     var delta = currentBlock.Value - lastPersistedBlock;
                     Source<HexBigInteger, NotUsed> source;
-
-
+                    
                     int flushEveryNthRound;
                     
                     if (delta > Settings.UseBulkSourceThreshold)
@@ -104,9 +101,12 @@ namespace CirclesLand.BlockchainIndexer
                         flushEveryNthRound = Settings.SerialFlushInterval;
                     }
 
+                    // roundContext.Log($"Starting with source {source?.GetType()?.Name ?? "<null>"}");
+                    
                     await source
                         .Select(o =>
                         {
+                            HealthService.ReportStartImportBlock(o.ToLong());
                             BlockTracker.AddRequested(roundContext.Connection, o.ToLong());
                             return o;
                         })
@@ -127,6 +127,7 @@ namespace CirclesLand.BlockchainIndexer
                             if (t.Length == 0)
                             {
                                 BlockTracker.InsertEmptyBlock(roundContext.Connection, block);
+                                CompleteBatch(flushEveryNthRound, roundContext);
                             }
 
                             var transactions = t
@@ -159,11 +160,13 @@ namespace CirclesLand.BlockchainIndexer
                         // Classify all transactions
                         .Select(transactionAndReceipt =>
                         {
-                            var classification = TransactionClassifier.Classify(
-                                transactionAndReceipt.Transaction,
-                                transactionAndReceipt.Receipt,
-                                null);
-
+                            var classification = transactionAndReceipt.Receipt == null
+                                ? TransactionClass.Unknown
+                                : TransactionClassifier.Classify(
+                                    transactionAndReceipt.Transaction,
+                                    transactionAndReceipt.Receipt,
+                                    null);
+                            
                             return (
                                 TotalTransactionsInBlock: transactionAndReceipt.TotalTransactionsInBlock,
                                 Timestamp: transactionAndReceipt.Timestamp,
@@ -176,11 +179,13 @@ namespace CirclesLand.BlockchainIndexer
                         // Add the details for each transaction
                         .SelectAsync(2, async classifiedTransactions =>
                         {
-                            var extractedDetails = TransactionDetailExtractor.Extract(
-                                    classifiedTransactions.Classification,
-                                    classifiedTransactions.Transaction,
-                                    classifiedTransactions.Receipt)
-                                .ToArray();
+                            var extractedDetails = classifiedTransactions.Receipt != null
+                                ? TransactionDetailExtractor.Extract(
+                                        classifiedTransactions.Classification,
+                                        classifiedTransactions.Transaction,
+                                        classifiedTransactions.Receipt)
+                                    .ToArray()
+                                : new IDetail[] { };
 
                             // For every CrcSignup-event check who the owner is
                             var signups = extractedDetails
@@ -193,7 +198,7 @@ namespace CirclesLand.BlockchainIndexer
                                     GnosisSafeABI.Json, signup.User);
                                 var function = contract.GetFunction("getOwners");
                                 var owners = await function.CallAsync<List<string>>();
-                                signup.Owners = owners.ToArray();
+                                signup.Owners = owners?.Select(o => o.ToLower()).ToArray() ?? Array.Empty<string>();
                             }
                             
                             var organisationSignups = extractedDetails
@@ -206,7 +211,7 @@ namespace CirclesLand.BlockchainIndexer
                                     GnosisSafeABI.Json, organisationSignup.Organization);
                                 var function = contract.GetFunction("getOwners");
                                 var owners = await function.CallAsync<List<string>>();
-                                organisationSignup.Owners = owners.ToArray();
+                                organisationSignup.Owners = owners.Select(o => o.ToLower()).ToArray();
                             }
                             
                             return (
@@ -232,26 +237,7 @@ namespace CirclesLand.BlockchainIndexer
                                 roundContext.Connection,
                                 txArr);
 
-                            string[] writtenTransactions = { };
-                            if (Statistics.TotalProcessedBatches % flushEveryNthRound == 0)
-                            {
-                                roundContext.Log($" Importing from staging tables ..");
-                                ImportProcedure.ImportFromStaging(roundContext.Connection
-                                    , Mode == IndexerMode.CatchUp ? 120 : 10);
-                            
-                                roundContext.Log($" Cleaning staging tables ..");
-                                writtenTransactions = StagingTables.CleanImported(roundContext.Connection);
-                            }
-
-                            if ((Mode == IndexerMode.Polling || Mode == IndexerMode.Live)
-                                && writtenTransactions.Length > 0)
-                            {
-                                roundContext.OnBatchSuccessNotify(writtenTransactions);   
-                            }
-                            else
-                            {
-                                roundContext.OnBatchSuccess();
-                            }
+                            CompleteBatch(flushEveryNthRound, roundContext);
                         }, materializer);
 
                     Logger.Log($"Completed the stream. Restarting ..");
@@ -260,6 +246,34 @@ namespace CirclesLand.BlockchainIndexer
                 {
                     roundContext.OnError(ex);
                 }
+            }
+        }
+
+        private void CompleteBatch(int flushEveryNthRound, RoundContext roundContext)
+        {
+            string[] writtenTransactions = { };
+            if (Statistics.TotalProcessedBatches % flushEveryNthRound == 0)
+            {
+                roundContext.Log($" Importing from staging tables ..");
+                ImportProcedure.ImportFromStaging(roundContext.Connection
+                    , Mode == IndexerMode.CatchUp
+                        ? Settings.BulkFlushTimeoutInSeconds
+                        : Settings.SerialFlushTimeoutInSeconds);
+
+                roundContext.Log($" Cleaning staging tables ..");
+                writtenTransactions = StagingTables.CleanImported(roundContext.Connection);
+            }
+            
+            HealthService.ReportCompleteBatch();
+            
+            if ((Mode == IndexerMode.Polling || Mode == IndexerMode.Live)
+                && writtenTransactions.Length > 0)
+            {
+                roundContext.OnBatchSuccessNotify(writtenTransactions);
+            }
+            else
+            {
+                roundContext.OnBatchSuccess();
             }
         }
     }
