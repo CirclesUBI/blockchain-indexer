@@ -54,7 +54,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         public static int WriteSafeEthTransfers(NpgsqlConnection writerConnection,
             string? safeEthTransferTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
-                    TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
+                    TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
                     )>
                 safeEthTransfers)
@@ -99,7 +99,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         public static int WriteEthTransfers(NpgsqlConnection writerConnection,
             string ethTransferTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
-                    TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
+                    TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
                     )>
                 ethTransfers)
@@ -141,7 +141,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         public static int WriteTrusts(NpgsqlConnection writerConnection,
             string trustTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
-                    TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
+                    TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
                     )>
                 trusts)
@@ -184,7 +184,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         public static int WriteSignups(NpgsqlConnection writerConnection,
             string signupsTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
-                    TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
+                    TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
                     )>
                 signups)
@@ -227,7 +227,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         public static int WriteOrganisationSignups(NpgsqlConnection writerConnection,
             string organisationSignupsTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
-                    TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
+                    TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
                     )>
                 organisationSignups)
@@ -268,7 +268,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         public static int WriteHubTransfers(NpgsqlConnection writerConnection,
             string hubTransfersTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
-                    TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
+                    TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
                     )>
                 hubTransfers)
@@ -310,7 +310,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
 
         public static int WriteErc20Transfers(NpgsqlConnection writerConnection, string? erc20TransferTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
-                    TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
+                    TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
                     )>
                 erc20Transfers)
@@ -354,7 +354,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
 
         public static int WriteTransactionRows(NpgsqlConnection writerConnection,
             IEnumerable<(int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
-                    TransactionReceipt Receipt, TransactionClass Classification, IDetail[] Details)>
+                    TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details)>
                 transactionsWithExtractedDetails,
             string transactionTableName)
         {

@@ -28,7 +28,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 string TxHash,
                 HexBigInteger Timestamp,
                 Transaction Transaction,
-                TransactionReceipt Receipt,
+                TransactionReceipt? Receipt,
                 TransactionClass Classification,
                 IDetail[] Details
                 )> transactionsWithExtractedDetails)

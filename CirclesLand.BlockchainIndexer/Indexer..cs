@@ -177,11 +177,13 @@ namespace CirclesLand.BlockchainIndexer
                         // Add the details for each transaction
                         .SelectAsync(2, async classifiedTransactions =>
                         {
-                            var extractedDetails = TransactionDetailExtractor.Extract(
-                                    classifiedTransactions.Classification,
-                                    classifiedTransactions.Transaction,
-                                    classifiedTransactions.Receipt)
-                                .ToArray();
+                            var extractedDetails = classifiedTransactions.Receipt != null
+                                ? TransactionDetailExtractor.Extract(
+                                        classifiedTransactions.Classification,
+                                        classifiedTransactions.Transaction,
+                                        classifiedTransactions.Receipt)
+                                    .ToArray()
+                                : new IDetail[] { };
 
                             // For every CrcSignup-event check who the owner is
                             var signups = extractedDetails

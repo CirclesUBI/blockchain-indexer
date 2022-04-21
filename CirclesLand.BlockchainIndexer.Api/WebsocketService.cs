@@ -41,7 +41,7 @@ namespace CirclesLand.BlockchainIndexer.Api
                 catch (Exception e)
                 {
                     Logger.LogError(e.Message);
-                    Logger.LogError(e.StackTrace);
+                    Logger.LogError(e.StackTrace ?? "<no stack trace>");
                 }
             }
             Console.WriteLine($"Broadcasted the following message to {Clients.Values.Count} websocket clients: \n{messageString}");

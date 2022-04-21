@@ -1,4 +1,8 @@
 ﻿<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+	<s:String x:Key="/Default/Environment/AssemblyExplorer/XmlDocument/@EntryValue">&lt;AssemblyExplorer&gt;
+  &lt;Assembly Path="/usr/share/dotnet/packs/Microsoft.AspNetCore.App.Ref/6.0.4/ref/net6.0/Microsoft.AspNetCore.dll" /&gt;
+  &lt;Assembly Path="/home/daniel/.nuget/packages/microsoft.aspnetcore/2.2.0/lib/netstandard2.0/Microsoft.AspNetCore.dll" /&gt;
+&lt;/AssemblyExplorer&gt;</s:String>
 	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=af89213f_002Dc32d_002D4347_002D8ba2_002Dfe884cd6526b/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="TestErc20Transfer" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
   &lt;TestAncestor&gt;
     &lt;TestId&gt;NUnit3x::887E8611-0D84-4C0C-A74B-828656BC72E2::net5.0::CirclesLand.BlockchainIndexer.Tests.TransactionClassifierTests&lt;/TestId&gt;
