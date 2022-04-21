@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
@@ -22,7 +23,7 @@ namespace CirclesLand.BlockchainIndexer.Server
             
             // This is O.K. because all dates are UTC
             AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-            
+
             using var host = Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
