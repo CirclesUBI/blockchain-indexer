@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "RKS0fitrz6vjYUDe4pyEhLkV3tzoBhKBluG5Y2ZKLi6bBXu+ksWScoHxPb28lRjkeeTEQtfP5EIJVAlBkfGrSw==",
+  "dgSpecHash": "nimBwAAgCXw9yquMKaPj0ccJ7eteUeCE2y7KPRgM9CZnsufaV8XR2kP80rv8PIQuRBgEhdTsx3GX+gVJ9qKrbg==",
   "success": true,
   "projectFilePath": "/home/daniel/src/circles-world/blockchain-indexer/CirclesLand.Host/CirclesLand.Host.csproj",
   "expectedPackageFiles": [

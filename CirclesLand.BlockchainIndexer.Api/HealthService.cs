@@ -19,10 +19,13 @@ namespace CirclesLand.BlockchainIndexer.Api
         private static bool _repeatedBlockWarning;
         private static bool _slowImportWarning;
         private static bool _noImport = true;
+        private static long _lastKnownBlock = 0;
+        private static long _lastImportedBlock = 0;
         private static DateTime _lastCompletedBatch = DateTime.Today;
 
         public static void ReportStartImportBlock(long block)
         {
+            _lastKnownBlock = block > _lastKnownBlock ? block : _lastKnownBlock;
             _repeatedBlockWarning = LastBlocks.Contains(block);
 
             while (LastBlocks.Count >= 25)
@@ -32,10 +35,11 @@ namespace CirclesLand.BlockchainIndexer.Api
             LastBlocks.Enqueue(block);
         }
         
-        public static void ReportCompleteBatch()
+        public static void ReportCompleteBatch(long block)
         {
             _noImport = false;
             _lastCompletedBatch = DateTime.Now;
+            _lastImportedBlock = block > _lastImportedBlock ? block : _lastImportedBlock;
         }
 
         private void Tick(object? state)
@@ -107,7 +111,9 @@ namespace CirclesLand.BlockchainIndexer.Api
                 var sw = new StreamWriter(context.Response.Body);
                 if (issues.Count == 0)
                 {
-                    await sw.WriteLineAsync("Healthy");
+                    await sw.WriteLineAsync("Healthy.");
+                    await sw.WriteLineAsync($"Last known block: {_lastKnownBlock}");
+                    await sw.WriteLineAsync($"Last imported block: {_lastImportedBlock}");
                     context.Response.StatusCode = 200;
                 }
                 else

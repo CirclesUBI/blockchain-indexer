@@ -238,6 +238,7 @@ namespace CirclesLand.BlockchainIndexer
                                 txArr);
 
                             CompleteBatch(flushEveryNthRound, roundContext);
+                            HealthService.ReportCompleteBatch(txArr.Max(o => o.Transaction.BlockNumber.ToLong()));
                         }, materializer);
 
                     Logger.Log($"Completed the stream. Restarting ..");
@@ -263,8 +264,6 @@ namespace CirclesLand.BlockchainIndexer
                 roundContext.Log($" Cleaning staging tables ..");
                 writtenTransactions = StagingTables.CleanImported(roundContext.Connection);
             }
-            
-            HealthService.ReportCompleteBatch();
             
             if ((Mode == IndexerMode.Polling || Mode == IndexerMode.Live)
                 && writtenTransactions.Length > 0)
