@@ -66,7 +66,10 @@ namespace CirclesLand.BlockchainIndexer
         {
             BatchSuccess?.Invoke(this, EventArgs.Empty);
             Interlocked.Increment(ref Statistics.TotalProcessedBatches);
-            Statistics.Print();
+            if (Statistics.TotalProcessedBatches % 10 == 0)
+            {
+                Statistics.Print();
+            }
 
             //WebsocketService.BroadcastMessage(transactionsJson);
         }
