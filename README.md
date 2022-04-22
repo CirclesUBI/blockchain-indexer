@@ -102,7 +102,8 @@ In the service:
 4) The service deletes all "imported" rows from the staging tables and returns the hashes of the "imported" transactions to websocket subscribers.
 
 **Health checks**   
-There is no built in mechanism for health checks but it should be easy to listen to the transaction hashes and define a timeout and alert after N-seconds without new transactions.
+The service exposes a health check endpoint at http://0.0.0.0/health.  
+It returns code 200 if healthy or 500 if not healthy.
 
 ## Known issues
 * Initially puts heavy load on the rpc-gateway because it downloads all blocks with 24 parallel connections (configurable) and receipts with 96 parallel connections (configurable) (should be replaced with direct ingest from a geth/netermind/etc. db)
