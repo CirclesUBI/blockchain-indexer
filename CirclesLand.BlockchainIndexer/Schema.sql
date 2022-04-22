@@ -1952,7 +1952,7 @@ with cte as (
            t.can_send_to,
            cs_b.token     AS can_send_to_token,
            t."limit",
-           0 as history_count,
+           0::bigint as history_count,
            t.timestamp as last_change,
            row_number() over (partition by t.address, t.can_send_to order by t.block_number desc, t.index desc) as row_no
     FROM crc_trust_2 t
@@ -1962,4 +1962,3 @@ with cte as (
 select "user", user_token, can_send_to, can_send_to_token, "limit", history_count, last_change
 from cte
 where row_no = 1;
-
