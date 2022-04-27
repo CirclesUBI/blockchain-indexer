@@ -80,7 +80,7 @@ namespace CirclesLand.BlockchainIndexer
                     var delta = currentBlock.Value - lastPersistedBlock;
                     Source<HexBigInteger, NotUsed> source;
                     
-                    int flushEveryNthRound;
+                    int flushEveryNthBatch;
                     
                     if (delta > Settings.UseBulkSourceThreshold)
                     {
@@ -91,7 +91,7 @@ namespace CirclesLand.BlockchainIndexer
                             new HexBigInteger(lastPersistedBlock)
                             , currentBlock);
                         
-                        flushEveryNthRound = Settings.BulkFlushInterval;
+                        flushEveryNthBatch = Settings.BulkFlushInterval;
                     }
                     else
                     {
@@ -99,7 +99,7 @@ namespace CirclesLand.BlockchainIndexer
                         Mode = IndexerMode.Polling;
 
                         source = roundContext.SourceFactory.CreatePollingSource();
-                        flushEveryNthRound = Settings.SerialFlushInterval;
+                        flushEveryNthBatch = Settings.SerialFlushInterval;
                     }
 
                     // roundContext.Log($"Starting with source {source?.GetType()?.Name ?? "<null>"}");
@@ -128,7 +128,7 @@ namespace CirclesLand.BlockchainIndexer
                             if (t.Length == 0)
                             {
                                 BlockTracker.InsertEmptyBlock(roundContext.Connection, block);
-                                CompleteBatch(flushEveryNthRound, roundContext);
+                                CompleteBatch(flushEveryNthBatch, roundContext);
                             }
 
                             var transactions = t
@@ -238,7 +238,7 @@ namespace CirclesLand.BlockchainIndexer
                                 roundContext.Connection,
                                 txArr);
 
-                            CompleteBatch(flushEveryNthRound, roundContext);
+                            CompleteBatch(flushEveryNthBatch, roundContext);
                             HealthService.ReportCompleteBatch(txArr.Max(o => o.Transaction.BlockNumber.ToLong()));
                         }, materializer);
 
@@ -251,10 +251,10 @@ namespace CirclesLand.BlockchainIndexer
             }
         }
 
-        private void CompleteBatch(int flushEveryNthRound, RoundContext roundContext)
+        private void CompleteBatch(int flushEveryNthBatch, RoundContext roundContext)
         {
             string[] writtenTransactions = { };
-            if (Statistics.TotalProcessedBatches % flushEveryNthRound == 0)
+            if (Statistics.TotalProcessedBatches % flushEveryNthBatch == 0)
             {
                 roundContext.Log($" Importing from staging tables ..");
                 ImportProcedure.ImportFromStaging(roundContext.Connection
@@ -274,6 +274,11 @@ namespace CirclesLand.BlockchainIndexer
             else
             {
                 roundContext.OnBatchSuccess();
+            }
+            
+            if (Statistics.TotalProcessedBatches % flushEveryNthBatch == 0)
+            {
+                Statistics.Print();
             }
         }
     }
