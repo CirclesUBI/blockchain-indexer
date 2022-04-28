@@ -22,18 +22,12 @@ public class LiveSource
 {
     public static async Task<Source<HexBigInteger, NotUsed>> Create(string connectionString, string rpcUrl)
     {
-        var client = new StreamingWebSocketClient(rpcUrl.Replace("https://", "wss://") + "/ws");
-        var subscription = new EthNewBlockHeadersSubscription(client);
-            
-        await client.StartAsync();
-        await subscription.SubscribeAsync();
-
         var catchingUp = true;
             
         return Source.UnfoldAsync(new HexBigInteger(0), async lastBlock =>
         {
-            await using var connection = new NpgsqlConnection(connectionString);
-            connection.Open();
+            await using var dbConnection = new NpgsqlConnection(connectionString);
+            dbConnection.Open();
 
             var web3 = new Web3(rpcUrl);
 
@@ -44,7 +38,7 @@ public class LiveSource
                     // Determine if we need to catch up (database old)
                     var mostRecentBlock = await web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
                     var lastIndexedBlock =
-                        connection.QuerySingleOrDefault<long?>("select max(number) from block") ?? 0;
+                        dbConnection.QuerySingleOrDefault<long?>("select max(number) from block") ?? 0;
 
                     if (lastBlock.Value == 0)
                     {
@@ -71,26 +65,57 @@ public class LiveSource
                     throw;
                 }
             }
-
+            
+            await dbConnection.CloseAsync();
+            
+            using var client = new StreamingWebSocketClient(rpcUrl.Replace("https://", "wss://") + "/ws");
+            var subscription = new EthNewBlockHeadersSubscription(client);
+            
             var completionSource = new TaskCompletionSource<HexBigInteger>(TaskCreationOptions.None);
+
+#pragma warning disable CS4014
+            Task.Delay(TimeSpan.FromSeconds(20))
+                .ContinueWith(_ =>
+#pragma warning restore CS4014
+                {
+                    if (completionSource.Task.IsCompleted)
+                    {
+                        return;
+                    }
+                    completionSource.SetException(new TimeoutException("Received no new block from the LiveSource for 20 sec."));
+                });
+
             var handler = new EventHandler<StreamingEventArgs<Block>>((sender, e) =>
             {
-                var utcTimestamp = DateTimeOffset.FromUnixTimeSeconds((long) e.Response.Timestamp.Value);
-                Console.WriteLine(
-                    $"New Block: Number: {e.Response.Number.Value}, Timestamp: {JsonConvert.SerializeObject(utcTimestamp)}");
-                    
-                completionSource.SetResult(new HexBigInteger(e.Response.Number.HexValue));
+                if (e.Exception != null)
+                {
+                    completionSource.SetException(e.Exception);
+                }
+                else
+                {
+                    var utcTimestamp = DateTimeOffset.FromUnixTimeSeconds((long) e.Response.Timestamp.Value);
+                    Console.WriteLine(
+                        $"New Block: Number: {e.Response.Number.Value}, Timestamp: {JsonConvert.SerializeObject(utcTimestamp)}");
+
+                    completionSource.SetResult(new HexBigInteger(e.Response.Number.HexValue));
+                }
+            });
+            var errorHandler = new WebSocketStreamingErrorEventHandler((sender, exception) =>
+            {
+                Logger.LogError("RPC client websocket connection closed." + exception.Message);
+                completionSource.SetException(exception);
             });
 
             subscription.SubscriptionDataResponse += handler;
-            subscription.UnsubscribeResponse += (sender, e) =>
-            {
-                Logger.LogError("RPC client websocket connection closed.");
-            };
-                
+            client.Error += errorHandler;
+            
+            await client.StartAsync();
+            await subscription.SubscribeAsync();
+            
             var currentBlock = await completionSource.Task;
                 
             subscription.SubscriptionDataResponse -= handler;
+            client.Error -= errorHandler;
 
             return new Option<(HexBigInteger, HexBigInteger)>((currentBlock, currentBlock));     
         });
