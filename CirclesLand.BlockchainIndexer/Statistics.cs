@@ -71,7 +71,7 @@ namespace CirclesLand.BlockchainIndexer
             Console.WriteLine($"Rates:");
             var totalBlocks = ($"{TotalDownloadedBlocks} ({totalBlockDownloadRate}/s)").PadRight(24);
             var lastBlocks = ($"{lastDownloadedBlocks} ({lastBlockDownloadRate}/s)").PadRight(24);
-            Console.WriteLine($"* Blocks       Total: {totalBlocks}; Last: {lastBlocks})");
+            Console.WriteLine($"* Blocks       Total: {totalBlocks}; Last: {lastBlocks}");
             
             var totalReceipts = ($"{TotalDownloadedReceipts} ({totalReceiptDownloadRate}/s)").PadRight(24);
             var lastReceipts = ($"{lastDownloadedReceipts} ({lastReceiptDownloadRate}/s)").PadRight(24);
