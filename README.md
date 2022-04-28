@@ -101,6 +101,10 @@ The [import_from_staging()](https://github.com/circlesland/blockchain-indexer/bl
 In the service:  
 4) The service deletes all "imported" rows from the staging tables and returns the hashes of the "imported" transactions to websocket subscribers.
 
+**Reorgs**  
+The indexer checks the last 16 blocks at an interval of 45 seconds.
+If a reorg occurred then all data from this block on will be deleted and re-imported.
+
 **Health checks**   
 The service exposes a health check endpoint at http://0.0.0.0/health.  
 It returns code 200 if healthy or 500 if not healthy.
