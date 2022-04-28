@@ -112,14 +112,22 @@ namespace CirclesLand.BlockchainIndexer
                 int flushEveryNthBatch;
                 if (_externalSource == null)
                 {
-                    Source<HexBigInteger, NotUsed> source = DetermineSource(roundContext, lastPersistedBlock,
-                        currentBlock, out flushEveryNthBatch);
-
-                    Source<HexBigInteger, NotUsed> reorgSource = ReorgSource.Create(45000, Settings.ConnectionString, Settings.RpcEndpointUrl);
-
+                    var source = await DetermineSource(roundContext, lastPersistedBlock,
+                        currentBlock);
+                    
+                    var reorgSource = roundContext.SourceFactory.CreateReorgSource();
                     var combinedSource = Source.Combine(reorgSource, source, i => new Merge<HexBigInteger>(i));
 
-                    activeSource = TransactionAndReceiptSource(combinedSource, roundContext, flushEveryNthBatch);
+                    flushEveryNthBatch = Mode == IndexerMode.CatchUp 
+                        ? Settings.BulkFlushInterval 
+                        : Settings.SerialFlushInterval;
+                    
+                    activeSource = TransactionAndReceiptSource(
+                        Mode == IndexerMode.CatchUp 
+                            ? source
+                            : combinedSource, 
+                        roundContext, 
+                        flushEveryNthBatch);
                 }
                 else
                 {
@@ -329,8 +337,8 @@ namespace CirclesLand.BlockchainIndexer
                 }, materializer);
         }
 
-        private Source<HexBigInteger, NotUsed> DetermineSource(RoundContext roundContext, long lastPersistedBlock,
-            HexBigInteger currentBlock, out int flushEveryNthBatch)
+        private async Task<Source<HexBigInteger, NotUsed>> DetermineSource(RoundContext roundContext, long lastPersistedBlock,
+            HexBigInteger currentBlock)
         {
             var delta = currentBlock.Value - lastPersistedBlock;
             Source<HexBigInteger, NotUsed> source;
@@ -342,16 +350,16 @@ namespace CirclesLand.BlockchainIndexer
                 source = roundContext.SourceFactory.CreateBulkSource(
                     new HexBigInteger(lastPersistedBlock)
                     , currentBlock);
-
-                flushEveryNthBatch = Settings.BulkFlushInterval;
             }
             else
             {
-                roundContext.Log($"Found {delta} blocks to catch up. Using the 'PollingSource'.");
+                roundContext.Log($"Found {delta} blocks to catch up. Using the 'Polling' source.");
                 Mode = IndexerMode.Polling;
-
                 source = roundContext.SourceFactory.CreatePollingSource();
-                flushEveryNthBatch = Settings.SerialFlushInterval;
+
+                // roundContext.Log($"Found {delta} blocks to catch up. Using the 'Live' source.");
+                // Mode = IndexerMode.Live;
+                // source = await roundContext.SourceFactory.CreateLiveSource();
             }
 
             return source;
