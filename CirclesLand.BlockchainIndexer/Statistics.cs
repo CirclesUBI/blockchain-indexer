@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 
 namespace CirclesLand.BlockchainIndexer
 {
@@ -38,6 +39,24 @@ namespace CirclesLand.BlockchainIndexer
         private static DateTime LastStatistics = DateTime.Now;
         
         public static long TotalProcessedBatches = 0;
+
+
+        private static ConcurrentDictionary<long, DateTime> _blockRuntimes = new();
+
+        public static void TrackBlockEnter(long block)
+        {
+            _blockRuntimes.TryAdd(block, DateTime.Now);
+        }
+        public static void TrackBlockWritten(long block)
+        {
+            if (!_blockRuntimes.TryRemove(block, out var startTime))
+            {
+                return;
+            }
+            
+            var runtime = DateTime.Now - startTime;
+            Console.WriteLine($"Block {block} took {runtime} to process.");
+        }
 
         public static void Print()
         {

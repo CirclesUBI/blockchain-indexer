@@ -7,6 +7,7 @@ using Akka;
 using Akka.Actor;
 using Akka.Streams;
 using Akka.Streams.Dsl;
+using Akka.Util.Internal;
 using CirclesLand.BlockchainIndexer.ABIs;
 using CirclesLand.BlockchainIndexer.Api;
 using CirclesLand.BlockchainIndexer.DetailExtractors;
@@ -95,14 +96,10 @@ namespace CirclesLand.BlockchainIndexer
                 roundContext.Log($"Finding the last persisted block ..");
                 var lastPersistedBlock = roundContext.GetLastValidBlock();
                 roundContext.Log($"Last persisted block: {lastPersistedBlock}");
-                
+
                 roundContext.Log($"Finding the latest blockchain block ..");
-                var currentBlock = await roundContext
-                    .Web3
-                    .Eth
-                    .Blocks
-                    .GetBlockNumber
-                    .SendRequestAsync();
+                
+                var currentBlock = await  roundContext.Start(lastPersistedBlock);
                 
                 roundContext.Log($"Latest blockchain block: {currentBlock.Value}");
 
@@ -143,7 +140,7 @@ namespace CirclesLand.BlockchainIndexer
                 await RunStream(materializer, activeSource, roundContext, flushEveryNthBatch);
 
                 Logger.Log($"Completed the stream. Running last import of this round ..");
-                CompleteBatch(flushEveryNthBatch, roundContext, true);
+                CompleteBatch(flushEveryNthBatch, roundContext, true, Array.Empty<(int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction, TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details)>());
             }
             catch (Exception ex)
             {
@@ -216,7 +213,7 @@ namespace CirclesLand.BlockchainIndexer
                     if (t.Length == 0)
                     {
                         BlockTracker.InsertEmptyBlock(roundContext.Connection, block);
-                        CompleteBatch(flushEveryNthBatch, roundContext);
+                        CompleteBatch(flushEveryNthBatch, roundContext, false, Array.Empty<(int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction, TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details)>());
                     }
 
                     var transactions = t
@@ -333,7 +330,8 @@ namespace CirclesLand.BlockchainIndexer
                         roundContext.Connection,
                         txArr);
 
-                    CompleteBatch(flushEveryNthBatch, roundContext);
+
+                    CompleteBatch(flushEveryNthBatch, roundContext, false, txArr);
                     HealthService.ReportCompleteBatch(txArr.Max(o => o.Transaction.BlockNumber.ToLong()));
                 }, materializer);
         }
@@ -366,10 +364,10 @@ namespace CirclesLand.BlockchainIndexer
             return source;
         }
 
-        private void CompleteBatch(int flushEveryNthBatch, RoundContext roundContext, bool flush = false)
+        private void CompleteBatch(int flushEveryNthBatch, RoundContext roundContext, bool forceFlush, (int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction, TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details)[] transactionsWithExtractedDetails)
         {
             string[] writtenTransactions = { };
-            if (Statistics.TotalProcessedBatches % flushEveryNthBatch == 0 || flush)
+            if (Statistics.TotalProcessedBatches % flushEveryNthBatch == 0 || forceFlush)
             {
                 roundContext.Log($" Importing from staging tables ..");
                 ImportProcedure.ImportFromStaging(roundContext.Connection
@@ -379,6 +377,10 @@ namespace CirclesLand.BlockchainIndexer
 
                 roundContext.Log($" Cleaning staging tables ..");
                 writtenTransactions = StagingTables.CleanImported(roundContext.Connection);
+                
+                var processedBlocks = new HashSet<long>();
+                transactionsWithExtractedDetails.ForEach(o => processedBlocks.Add(o.Transaction.BlockNumber.ToLong()));
+                processedBlocks.ForEach(Statistics.TrackBlockWritten);
             }
             
             if ((Mode == IndexerMode.Polling || Mode == IndexerMode.Live)

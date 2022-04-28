@@ -113,6 +113,7 @@ public class LiveSource
             await subscription.SubscribeAsync();
             
             var currentBlock = await completionSource.Task;
+            Statistics.TrackBlockEnter(currentBlock.ToLong());
                 
             subscription.SubscriptionDataResponse -= handler;
             client.Error -= errorHandler;
