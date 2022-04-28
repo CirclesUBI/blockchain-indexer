@@ -9,6 +9,7 @@ namespace CirclesLand.BlockchainIndexer
     {
         public static readonly string ConnectionString;
         public static readonly string RpcEndpointUrl;
+        public static readonly string? RpcWsEndpointUrl;
         public static readonly string WebsocketServerUrl;
         
         public static readonly int DelayStartup;
@@ -122,9 +123,19 @@ namespace CirclesLand.BlockchainIndexer
             }
 
             if (!Uri.TryCreate(Environment.GetEnvironmentVariable("INDEXER_RPC_GATEWAY_URL"), UriKind.Absolute, 
-                out var rpcGatewayUri))
+                    out var rpcGatewayUri))
             {
                 validationErrors.Add("Couldn't parse the 'INDEXER_RPC_GATEWAY_URL' environment variable. Expected 'System.Uri'.");
+            }
+
+            if (!Uri.TryCreate(Environment.GetEnvironmentVariable("INDEXER_RPC_GATEWAY_WS_URL"), UriKind.Absolute, 
+                    out var rpcGatewayWsUri))
+            {
+                if (rpcGatewayUri == null)
+                {
+                    validationErrors.Add(
+                        "Couldn't parse the 'INDEXER_RPC_GATEWAY_WS_URL' environment variable. Expected 'System.Uri'.");
+                }
             }
 
             if (!Uri.TryCreate(Environment.GetEnvironmentVariable("INDEXER_WEBSOCKET_URL"), UriKind.Absolute,
@@ -143,6 +154,9 @@ namespace CirclesLand.BlockchainIndexer
             
             RpcEndpointUrl = rpcGatewayUri?.ToString() ?? "null";
             ValidSettings.Add("INDEXER_RPC_GATEWAY_URL", (RpcEndpointUrl, false));
+            
+            RpcWsEndpointUrl = rpcGatewayWsUri?.ToString() ?? "null";
+            ValidSettings.Add("INDEXER_RPC_GATEWAY_WS_URL", (RpcWsEndpointUrl, false));
             
             WebsocketServerUrl = websocketUrl?.ToString() ?? "null";
             ValidSettings.Add("INDEXER_WEBSOCKET_URL", (WebsocketServerUrl, false));

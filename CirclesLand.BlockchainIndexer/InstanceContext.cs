@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using CirclesLand.BlockchainIndexer.Persistence;
+using Nethereum.JsonRpc.WebSocketClient;
 using Nethereum.Web3;
 using Npgsql;
 
@@ -20,8 +21,18 @@ namespace CirclesLand.BlockchainIndexer
         {
             var connection = GetConnection();
             connection.Open();
+
+            Web3 web3;
+            if (Settings.RpcWsEndpointUrl != null && Settings.RpcWsEndpointUrl != "(null)")
+            {
+                var client = new WebSocketClient(Settings.RpcWsEndpointUrl);
+                web3 = new Web3(client);
+            }
+            else
+            {
+                web3 = new Web3(Settings.RpcEndpointUrl);   
+            }
             
-            var web3 = new Web3(Settings.RpcEndpointUrl);
             var roundNo = Interlocked.Increment(ref Statistics.TotalStartedRounds);
 
             var penalty = Settings.ErrorRestartPenaltyInMs *

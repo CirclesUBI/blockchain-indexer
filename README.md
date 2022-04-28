@@ -45,7 +45,7 @@ There are two different types of sources: One for bulk imports and another polli
 The first one is used to update a large block backlog. The second one is used to keep the database up to date.
 * [BulkSource](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/Sources/BulkSource.cs)
 * [IntervalSource](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/Sources/IntervalSource.cs)
-* [LiveSource (incomplete)](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/Sources/LiveSource.cs)
+* [LiveSource](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/Sources/LiveSource.cs)
 
 ### Download
 The block sources only emit block numbers downstream. The next stages download the block with all transactions and also all transaction-receipts.  

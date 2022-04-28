@@ -68,7 +68,7 @@ public class LiveSource
             
             await dbConnection.CloseAsync();
             
-            using var client = new StreamingWebSocketClient(rpcUrl.Replace("https://", "wss://") + "/ws");
+            using var client = new StreamingWebSocketClient(Settings.RpcWsEndpointUrl);
             var subscription = new EthNewBlockHeadersSubscription(client);
             
             var completionSource = new TaskCompletionSource<HexBigInteger>(TaskCreationOptions.None);
