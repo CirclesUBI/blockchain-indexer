@@ -117,6 +117,11 @@ public class LiveSource
             subscription.SubscriptionDataResponse -= handler;
             client.Error -= errorHandler;
 
+            if (currentBlock.Value - 1 > lastBlock.Value)
+            {
+                throw new Exception($"The live source missed at least one block. Current block: {currentBlock.Value}; Last block: {lastBlock.Value}");
+            }
+
             return new Option<(HexBigInteger, HexBigInteger)>((currentBlock, currentBlock));     
         });
     }
