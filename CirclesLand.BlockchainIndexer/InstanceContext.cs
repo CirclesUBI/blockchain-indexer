@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
-using CirclesLand.BlockchainIndexer.Persistence;
+using CirclesLand.BlockchainIndexer.Util;
 using Nethereum.JsonRpc.WebSocketClient;
 using Nethereum.Web3;
 using Npgsql;
@@ -21,19 +21,28 @@ namespace CirclesLand.BlockchainIndexer
         {
             var connection = GetConnection();
             connection.Open();
+            
+            var roundNo = Interlocked.Increment(ref Statistics.TotalStartedRounds);
 
             Web3 web3;
-            if (Settings.RpcWsEndpointUrl != null && Settings.RpcWsEndpointUrl != "(null)")
+            
+            // Always use http in the first round because it allows for more parallel downloads.
+            // Use websockets afterwards because of the lower latency.
+            var catchUpMostLikelyCompleted = roundNo > 1 && Statistics.TotalErrorCount < roundNo;
+            
+            if (catchUpMostLikelyCompleted 
+                && Settings.RpcWsEndpointUrl != null 
+                && Settings.RpcWsEndpointUrl != "null")
             {
+                Logger.Log("Using the websocket connection for the next round.");
                 var client = new WebSocketClient(Settings.RpcWsEndpointUrl);
                 web3 = new Web3(client);
             }
             else
             {
+                Logger.Log("Using the http connection for the next round.");
                 web3 = new Web3(Settings.RpcEndpointUrl);   
             }
-            
-            var roundNo = Interlocked.Increment(ref Statistics.TotalStartedRounds);
 
             var penalty = Settings.ErrorRestartPenaltyInMs *
                           (Statistics.ImmediateErrorCount * Statistics.ImmediateErrorCount);

@@ -360,7 +360,7 @@ namespace CirclesLand.BlockchainIndexer
 
                 roundContext.Log($"Found {delta} blocks to catch up. Using the 'Live' source.");
                 Mode = IndexerMode.Live;
-                source = await roundContext.SourceFactory.CreateLiveSource();
+                source = await roundContext.SourceFactory.CreateLiveSource(lastPersistedBlock);
             }
 
             return source;

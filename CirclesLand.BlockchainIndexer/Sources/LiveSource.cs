@@ -20,7 +20,7 @@ namespace CirclesLand.BlockchainIndexer.Sources;
 
 public class LiveSource
 {
-    public static async Task<Source<HexBigInteger, NotUsed>> Create(string connectionString, string rpcUrl)
+    public static async Task<Source<HexBigInteger, NotUsed>> Create(string connectionString, string rpcUrl, long lastPersistedBlock)
     {
         var catchingUp = true;
             
@@ -36,17 +36,15 @@ public class LiveSource
                 try
                 {
                     // Determine if we need to catch up (database old)
-                    var mostRecentBlock = await web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();
-                    var lastIndexedBlock =
-                        dbConnection.QuerySingleOrDefault<long?>("select max(number) from block") ?? 0;
+                    var mostRecentBlock = await web3.Eth.Blocks.GetBlockNumber.SendRequestAsync();;
 
                     if (lastBlock.Value == 0)
                     {
                         lastBlock = new HexBigInteger(
-                            lastIndexedBlock == 0 ? Settings.StartFromBlock : lastIndexedBlock);
+                            lastPersistedBlock == 0 ? Settings.StartFromBlock : lastPersistedBlock);
                     }
 
-                    if (mostRecentBlock.ToLong() > lastIndexedBlock && mostRecentBlock.Value > lastBlock.Value)
+                    if (mostRecentBlock.ToLong() > lastPersistedBlock && mostRecentBlock.Value > lastBlock.Value)
                     {
                         var nextBlockToIndex = lastBlock.Value + 1;
                         Console.WriteLine($"Catching up block: {nextBlockToIndex}");
@@ -95,7 +93,9 @@ public class LiveSource
                 {
                     var utcTimestamp = DateTimeOffset.FromUnixTimeSeconds((long) e.Response.Timestamp.Value);
                     Console.WriteLine(
-                        $"New Block: Number: {e.Response.Number.Value}, Timestamp: {JsonConvert.SerializeObject(utcTimestamp)}");
+                        $"New Block: Number: {e.Response.Number.Value}, " +
+                        $"Timestamp: {JsonConvert.SerializeObject(utcTimestamp)}, " +
+                        $"Server time: {JsonConvert.SerializeObject(DateTime.Now.ToUniversalTime())}");
 
                     completionSource.SetResult(new HexBigInteger(e.Response.Number.HexValue));
                 }

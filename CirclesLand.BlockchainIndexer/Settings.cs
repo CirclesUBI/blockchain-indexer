@@ -161,7 +161,7 @@ namespace CirclesLand.BlockchainIndexer
             WebsocketServerUrl = websocketUrl?.ToString() ?? "null";
             ValidSettings.Add("INDEXER_WEBSOCKET_URL", (WebsocketServerUrl, false));
             
-            UseBulkSourceThreshold = TryGetIntEnvVar("USE_BULK_SOURCE_THRESHOLD", 80);
+            UseBulkSourceThreshold = TryGetIntEnvVar("USE_BULK_SOURCE_THRESHOLD", 32);
             BulkFlushInterval = TryGetIntEnvVar("BULK_FLUSH_INTERVAL_IN_BLOCKS", 10);
             BulkFlushTimeoutInSeconds = TryGetIntEnvVar("BULK_FLUSH_TIMEOUT_IN_SECONDS", 240);
             SerialFlushInterval = TryGetIntEnvVar("SERIAL_FLUSH_INTERVAL_IN_BLOCKS",1 );
