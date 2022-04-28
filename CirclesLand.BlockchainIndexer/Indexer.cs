@@ -142,7 +142,8 @@ namespace CirclesLand.BlockchainIndexer
 
                 await RunStream(materializer, activeSource, roundContext, flushEveryNthBatch);
 
-                Logger.Log($"Completed the stream.");
+                Logger.Log($"Completed the stream. Running last import of this round ..");
+                CompleteBatch(flushEveryNthBatch, roundContext, true);
             }
             catch (Exception ex)
             {
@@ -365,10 +366,10 @@ namespace CirclesLand.BlockchainIndexer
             return source;
         }
 
-        private void CompleteBatch(int flushEveryNthBatch, RoundContext roundContext)
+        private void CompleteBatch(int flushEveryNthBatch, RoundContext roundContext, bool flush = false)
         {
             string[] writtenTransactions = { };
-            if (Statistics.TotalProcessedBatches % flushEveryNthBatch == 0)
+            if (Statistics.TotalProcessedBatches % flushEveryNthBatch == 0 || flush)
             {
                 roundContext.Log($" Importing from staging tables ..");
                 ImportProcedure.ImportFromStaging(roundContext.Connection
