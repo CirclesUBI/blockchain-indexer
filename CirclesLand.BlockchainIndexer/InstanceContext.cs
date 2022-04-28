@@ -9,7 +9,7 @@ namespace CirclesLand.BlockchainIndexer
 {
     public class InstanceContext
     {
-        private ConcurrentDictionary<long, RoundContext> _rounds = new();
+        private readonly ConcurrentDictionary<long, RoundContext> _rounds = new();
 
         private NpgsqlConnection GetConnection()
         {
@@ -69,12 +69,6 @@ namespace CirclesLand.BlockchainIndexer
             removedRound.Disposed -= RoundOnDisposed;
 
             Interlocked.Increment(ref Statistics.TotalCompletedRounds);
-        }
-
-        public void TruncateStagingTables()
-        {
-            using var connection = GetConnection();
-            StagingTables.Truncate(connection);
         }
     }
 }
