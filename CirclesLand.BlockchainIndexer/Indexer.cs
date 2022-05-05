@@ -300,11 +300,18 @@ namespace CirclesLand.BlockchainIndexer
 
                     foreach (var organisationSignup in organisationSignups)
                     {
-                        var contract = roundContext.Web3.Eth.GetContract(
-                            GnosisSafeABI.Json, organisationSignup.Organization);
-                        var function = contract.GetFunction("getOwners");
-                        var owners = (await function.CallAsync<List<string>>()) ?? new List<string>();
-                        organisationSignup.Owners = owners.Select(o => o.ToLower()).ToArray();
+                        try
+                        {
+                            var contract = roundContext.Web3.Eth.GetContract(
+                                GnosisSafeABI.Json, organisationSignup.Organization);
+                            var function = contract.GetFunction("getOwners");
+                            var owners = (await function.CallAsync<List<string>>()) ?? new List<string>();
+                            organisationSignup.Owners = owners.Select(o => o.ToLower()).ToArray();
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(ex.Message + "\n" + ex.StackTrace);
+                        }
                     }
 
                     return (
