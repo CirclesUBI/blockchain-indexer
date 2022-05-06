@@ -1974,6 +1974,15 @@ create index ix_cache_crc_balances_by_safe_and_token_token on cache_crc_balances
 create index ix_cache_crc_balances_by_safe_and_token_token_owner on cache_crc_balances_by_safe_and_token (token_owner);
 create index ix_cache_crc_balances_by_safe_and_token_last_change_at on cache_crc_balances_by_safe_and_token (last_change_at);
 
+create table cache_crc_current_trust
+as
+select *
+from crc_current_trust_2;
+
+create index ix_cache_crc_current_trust_user on cache_crc_current_trust("user");
+create index ix_cache_crc_current_trust_can_send_to on cache_crc_current_trust(can_send_to);
+create index ix_cache_crc_current_trust_last_change on cache_crc_current_trust(last_change);
+
 
 create or replace procedure import_from_staging_2()
     language plpgsql
@@ -2168,6 +2177,52 @@ where cb.safe_address = ANY(
             )))::text[]
     )
   and b.balance is null;
+
+
+-- delete outdated cache entries
+delete from cache_crc_current_trust b
+    using crc_current_trust_2 cb
+where (cb."user" = ANY(
+    (select (array_cat(
+    (select array_agg("address") from _crc_trust_staging),
+    (select distinct array_agg("can_send_to") from _crc_trust_staging)
+    )))::text[]
+    )
+   or cb."can_send_to" = ANY(
+    (select (array_cat(
+    (select array_agg("address") from _crc_trust_staging),
+    (select distinct array_agg("can_send_to") from _crc_trust_staging)
+    )))::text[]
+    ))
+  and b."user" = cb."user"
+  and b.can_send_to = cb.can_send_to
+  and b.last_change < cb.last_change;
+
+-- insert updated cache entries
+insert into cache_crc_current_trust
+select cb."user"
+     , cb.user_token
+     , cb.can_send_to
+     , cb.can_send_to_token
+     , cb."limit"
+     , cb.history_count
+     , cb.last_change
+from crc_current_trust_2 cb
+         left join cache_crc_current_trust b on b."user" = cb."user"
+    and b."can_send_to" = cb."can_send_to"
+where (cb."user" = ANY(
+    (select (array_cat(
+            (select array_agg("address") from _crc_trust_staging),
+                (select distinct array_agg("can_send_to") from _crc_trust_staging)
+            )))::text[]
+    )
+   or cb."can_send_to" = ANY(
+    (select (array_cat(
+            (select array_agg("address") from _crc_trust_staging),
+                    (select distinct array_agg("can_send_to") from _crc_trust_staging)
+                )))::text[]
+    ))
+  and b."limit" is null;
 
 end;
 $$;
