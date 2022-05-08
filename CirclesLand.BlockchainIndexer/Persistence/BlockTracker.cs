@@ -16,6 +16,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 @"with a as (
                         select distinct block_no
                         from requested_blocks
+
                         order by block_no
                     ), b as (
                         select distinct number
@@ -25,6 +26,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                         select a.block_no as requested, b.number as actual
                         from a
                                  left join b on a.block_no = b.number
+                        where a.block_no >= 12529456
                         order by a.block_no
                     )
                     select coalesce(min(c.requested), (select max(number) from block)) - 1 as last_correctly_imported_block

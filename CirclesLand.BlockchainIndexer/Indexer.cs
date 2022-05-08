@@ -76,6 +76,9 @@ namespace CirclesLand.BlockchainIndexer
                 }
 
                 roundContext.Log($"Round {roundContext.RoundNo} started at {DateTime.Now}.");
+
+                roundContext.Log($" Importing from staging tables ..");
+                ImportProcedure.ImportFromStaging(roundContext.Connection, Settings.BulkFlushTimeoutInSeconds);
                 
                 roundContext.Log($"Finding the last persisted block ..");
                 var lastPersistedBlock = roundContext.GetLastValidBlock();
@@ -98,7 +101,7 @@ namespace CirclesLand.BlockchainIndexer
                 //         roundContext.Log($"Reorg at: {lastReorgAt}");
                 //     }
                 // }
-
+                
                 Source<(int TotalTransactionsInBlock, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt Receipt), NotUsed>? activeSource;
 
@@ -109,16 +112,18 @@ namespace CirclesLand.BlockchainIndexer
                         currentBlock);
                     
                     var reorgSource = roundContext.SourceFactory.CreateReorgSource();
-                    var combinedSource = Source.Combine(reorgSource, source, i => new Merge<HexBigInteger>(i));
+                    var gapSource = GapSource.Create(60000, Settings.ConnectionString);
+                    var combinedSource1 = Source.Combine(reorgSource, source, i => new Merge<HexBigInteger>(i));
+                    var combinedSource2 = Source.Combine(combinedSource1, gapSource, i => new Merge<HexBigInteger>(i));
 
                     flushEveryNthBatch = Mode == IndexerMode.CatchUp 
                         ? Settings.BulkFlushInterval 
                         : Settings.SerialFlushInterval;
                     
                     activeSource = TransactionAndReceiptSource(
-                        Mode == IndexerMode.CatchUp 
+                        Mode == IndexerMode.CatchUp
                             ? source
-                            : combinedSource, 
+                            : combinedSource2, 
                         roundContext, 
                         flushEveryNthBatch);
                 }
