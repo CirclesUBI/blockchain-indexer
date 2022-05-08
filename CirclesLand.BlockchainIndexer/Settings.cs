@@ -170,9 +170,9 @@ namespace CirclesLand.BlockchainIndexer
             MaxErrorRestartPenaltyInMs = TryGetIntEnvVar("MAX_ERROR_RESTART_PENALTY_IN_MILLISECONDS", 1000 * 60 * 4);
             PollingIntervalInMs = TryGetIntEnvVar("POLLING_INTERVAL_IN_MILLISECONDS", 500);
             MaxParallelBlockDownloads = TryGetIntEnvVar("MAX_PARALLEL_BLOCK_DOWNLOADS", 24);
-            MaxDownloadedBlockBufferSize = TryGetIntEnvVar("MAX_BLOCK_BUFFER_SIZE", 24 * 25);
+            MaxDownloadedBlockBufferSize = TryGetIntEnvVar("MAX_BLOCK_BUFFER_SIZE", MaxParallelBlockDownloads * 25);
             MaxParallelReceiptDownloads = TryGetIntEnvVar("MAX_PARALLEL_RECEIPT_DOWNLOADS", 96);
-            MaxDownloadedTransactionsBufferSize = TryGetIntEnvVar("MAX_TRANSACTION_BUFFER_SIZE", 96 * 25);
+            MaxDownloadedTransactionsBufferSize = TryGetIntEnvVar("MAX_TRANSACTION_BUFFER_SIZE", MaxParallelReceiptDownloads * 25);
             MaxDownloadedReceiptsBufferSize = TryGetIntEnvVar("MAX_RECEIPT_BUFFER_SIZE", 96 * 25);
             WriteToStagingBatchSize = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_SIZE", 2000);
             WriteToStagingBatchMaxIntervalInSeconds = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_MAX_INTERVAL_IN_SECONDS", 5);

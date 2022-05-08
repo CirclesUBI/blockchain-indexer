@@ -22,22 +22,6 @@ using Npgsql;
 
 namespace CirclesLand.BlockchainIndexer
 {
-    public record BlockWithTransaction (
-        long Block, 
-        int TotalTransactionsInBlock, 
-        HexBigInteger Timestamp,
-        Transaction Transactions);
-    
-    public class IndexedBlockEventArgs : EventArgs
-    {
-        public HexBigInteger Block { get; }
-
-        public IndexedBlockEventArgs(HexBigInteger block)
-        {
-            Block = block;
-        }
-    }
-
     public enum IndexerMode
     {
         NotRunning,
@@ -100,8 +84,20 @@ namespace CirclesLand.BlockchainIndexer
                 roundContext.Log($"Finding the latest blockchain block ..");
                 
                 var currentBlock = await  roundContext.Start(lastPersistedBlock);
-                
                 roundContext.Log($"Latest blockchain block: {currentBlock.Value}");
+                
+                // roundContext.Log($"Checking for reorgs in the last {Settings.UseBulkSourceThreshold} blocks ...");
+                //
+                // using (var connection = new NpgsqlConnection(Settings.ConnectionString))
+                // {
+                //     connection.Open();
+                //     var web3 = new Web3(Settings.RpcEndpointUrl);
+                //     var lastReorgAt = await ReorgSource.CheckForReorgsInLastBlocks(connection, web3, lastPersistedBlock, Settings.UseBulkSourceThreshold);
+                //     if (lastReorgAt < long.MaxValue)
+                //     {
+                //         roundContext.Log($"Reorg at: {lastReorgAt}");
+                //     }
+                // }
 
                 Source<(int TotalTransactionsInBlock, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt Receipt), NotUsed>? activeSource;
@@ -155,30 +151,32 @@ namespace CirclesLand.BlockchainIndexer
             return source
                 .Select(o =>
                 {
-                    if (ReorgSource.BlockReorgsSharedState.Contains(o.ToLong()))
+                    if (ReorgSource.BlockReorgsSharedState.Count > 0)
                     {
+                        var lastReorgBlock = ReorgSource.BlockReorgsSharedState.Min();
+                        
                         var color = Console.ForegroundColor;
                         Console.ForegroundColor = ConsoleColor.Magenta;
-                        Console.WriteLine($"Processing reorg starting at {o.ToLong()} ...");
+                        Console.WriteLine($"Processing reorg starting at {lastReorgBlock} ...");
                         Console.ForegroundColor = color;
 
                         using var connection = new NpgsqlConnection(Settings.ConnectionString);
                         connection.Open();
                         
                         Console.ForegroundColor = ConsoleColor.Magenta;
-                        Console.WriteLine($"Deleting all data >= block ${o.ToLong()} ...");
+                        Console.WriteLine($"Deleting all data >= block ${lastReorgBlock} ...");
                         Console.ForegroundColor = color;
                         
                         var tx = connection.BeginTransaction();
-                        new NpgsqlCommand($"delete from crc_hub_transfer_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from crc_organisation_signup_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from crc_signup_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from crc_trust_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from erc20_transfer_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from eth_transfer_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from gnosis_safe_eth_transfer_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from transaction_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from block where number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from crc_hub_transfer_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from crc_organisation_signup_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from crc_signup_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from crc_trust_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from erc20_transfer_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from eth_transfer_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from gnosis_safe_eth_transfer_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from transaction_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from block where number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
 
                         tx.Commit();
                         connection.Close();
@@ -336,8 +334,7 @@ namespace CirclesLand.BlockchainIndexer
                     TransactionsWriter.WriteTransactions(
                         roundContext.Connection,
                         txArr);
-
-
+                    
                     CompleteBatch(flushEveryNthBatch, roundContext, false, txArr);
                     HealthService.ReportCompleteBatch(txArr.Max(o => o.Transaction.BlockNumber.ToLong()));
                 }, materializer);

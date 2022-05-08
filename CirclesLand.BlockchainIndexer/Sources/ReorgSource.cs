@@ -33,30 +33,9 @@ namespace CirclesLand.BlockchainIndexer.Sources
 
                         Logger.Log($"Checking for reorgs ..");
                         
-                        await using var cmd = new NpgsqlCommand("select number, hash from block where number >= (select max(number) from block) - 16 order by number desc", connection);
-                        await using var reader = cmd.ExecuteReader();
-                        
-                        var row = new object[reader.FieldCount];
-                        var oldestReorgBlock = long.MaxValue;
-                        
-                        while (reader.Read())
-                        {
-                            reader.GetValues(row);
-                            
-                            var block = await web3.Eth.Blocks.GetBlockWithTransactionsByNumber.SendRequestAsync(
-                                new BlockParameter(Convert.ToUInt64(row[0])));
-
-                            if (block.BlockHash != row[1].ToString())
-                            {
-                                oldestReorgBlock = block.Number.ToLong();
-                            }
-                        }
-
+                        var oldestReorgBlock = await CheckForReorgsInLastBlocks(connection, web3);
                         if (oldestReorgBlock < long.MaxValue)
-                        {
-                            BlockReorgsSharedState.TryAdd(oldestReorgBlock);
-                            Logger.Log($"Reorg detected at block height: {oldestReorgBlock}.");
-                            
+                        {   
                             return new Option<(HexBigInteger, HexBigInteger)>(
                                 (new HexBigInteger(oldestReorgBlock), new HexBigInteger(oldestReorgBlock)));                            
                         }
@@ -72,6 +51,39 @@ namespace CirclesLand.BlockchainIndexer.Sources
                     }
                 }
             });
+        }
+
+        public static async Task<long> CheckForReorgsInLastBlocks(NpgsqlConnection connection, Web3 web3, long? fromBlock = null, long blockCount = 16)
+        {
+            await using var cmd =
+                new NpgsqlCommand(
+                    $"select number, hash from block where number >= {(fromBlock.HasValue ? fromBlock : "(select max(number) from block)")} - {blockCount} order by number desc",
+                    connection);
+            await using var reader = cmd.ExecuteReader();
+
+            var row = new object[reader.FieldCount];
+            var oldestReorgBlock = long.MaxValue;
+
+            while (reader.Read())
+            {
+                reader.GetValues(row);
+
+                var block = await web3.Eth.Blocks.GetBlockWithTransactionsHashesByNumber.SendRequestAsync(
+                    new BlockParameter(Convert.ToUInt64(row[0])));
+
+                if (block.BlockHash != row[1].ToString())
+                {
+                    oldestReorgBlock = block.Number.ToLong();
+                }
+            }
+
+            if (oldestReorgBlock < long.MaxValue)
+            {
+                Logger.Log($"Reorg detected at block height: {oldestReorgBlock}.");
+                BlockReorgsSharedState.TryAdd(oldestReorgBlock);
+            }
+
+            return oldestReorgBlock;
         }
     }
 }
