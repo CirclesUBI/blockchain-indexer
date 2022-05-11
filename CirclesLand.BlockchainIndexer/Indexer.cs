@@ -112,18 +112,18 @@ namespace CirclesLand.BlockchainIndexer
                         currentBlock);
                     
                     var reorgSource = roundContext.SourceFactory.CreateReorgSource();
-                    var gapSource = GapSource.Create(60000, Settings.ConnectionString);
                     var combinedSource1 = Source.Combine(reorgSource, source, i => new Merge<HexBigInteger>(i));
-                    var combinedSource2 = Source.Combine(combinedSource1, gapSource, i => new Merge<HexBigInteger>(i));
-
+                    var combinedSerialSource = Source.Combine(combinedSource1, GapSource.Create(60000, Settings.ConnectionString), i => new Merge<HexBigInteger>(i));
+                    var combinedBulkSource = Source.Combine(source, GapSource.Create(60000, Settings.ConnectionString, true), i => new Merge<HexBigInteger>(i));
+                    
                     flushEveryNthBatch = Mode == IndexerMode.CatchUp 
                         ? Settings.BulkFlushInterval 
                         : Settings.SerialFlushInterval;
                     
                     activeSource = TransactionAndReceiptSource(
                         Mode == IndexerMode.CatchUp
-                            ? source
-                            : combinedSource2, 
+                            ? combinedBulkSource
+                            : combinedSerialSource, 
                         roundContext, 
                         flushEveryNthBatch);
                 }

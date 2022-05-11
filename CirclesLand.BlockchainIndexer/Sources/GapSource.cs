@@ -22,19 +22,25 @@ namespace CirclesLand.BlockchainIndexer.Sources
         private static Queue<HexBigInteger> _missingBlocks = new();
         private static bool first = true;
 
-        public static Source<HexBigInteger, NotUsed> Create(int intervalInMs, string connectionString)
+        public static Source<HexBigInteger, NotUsed> Create(int intervalInMs, string connectionString, bool finish = false)
         {
+            var fin = finish;
             return Source.UnfoldAsync(new HexBigInteger(0), async (lastGapBlock) =>
             {
                 await using var connection = new NpgsqlConnection(connectionString);
                 connection.Open();
 
-                while (true)
+                while (!fin)
                 {
                     try
                     {
                         if (_missingBlocks.Count == 0)
                         {
+                            if (!first && finish)
+                            {
+                                fin = true;
+                                break;
+                            }
                             Logger.Log($"Checking for gaps ..");
                             var missingBlocks = FindMissingBlocks(connection);
                             missingBlocks.ForEach(o => _missingBlocks.Enqueue(o));
@@ -59,6 +65,8 @@ namespace CirclesLand.BlockchainIndexer.Sources
                         throw;
                     }
                 }
+
+                return new Option<(HexBigInteger, HexBigInteger)>();
             });
         }
 
