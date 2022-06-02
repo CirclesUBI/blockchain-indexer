@@ -2,6 +2,7 @@ using CirclesLand.BlockchainIndexer.Api;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Prometheus;
 
 namespace CirclesLand.BlockchainIndexer.Server
 {
@@ -16,6 +17,13 @@ namespace CirclesLand.BlockchainIndexer.Server
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            app.UseRouting();
+            app.UseEndpoints(endpoints =>
+            {
+                // ...
+                endpoints.MapMetrics();
+            });
+            
             // enable websocket support
             app.UseWebSockets(new WebSocketOptions
             {
@@ -23,7 +31,7 @@ namespace CirclesLand.BlockchainIndexer.Server
                 // KeepAliveInterval = TimeSpan.FromSeconds(120),
                 // AllowedOrigins = { "*" }
             });
-
+            
             // add our custom middleware to the pipeline
             app.UseMiddleware<HealthService>();
             app.UseMiddleware<WebsocketService>();

@@ -6,11 +6,18 @@ using CirclesLand.BlockchainIndexer.Util;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Prometheus;
 
 namespace CirclesLand.BlockchainIndexer.Api
 {
     public class WebsocketService : IMiddleware
     {
+        private static readonly Gauge ConnectionCount = Metrics
+            .CreateGauge("indexer_websocket_connection_count", "The number of current websocket connections.", "state");
+        
+        private static readonly Counter BroadcastMessageCount = Metrics
+            .CreateCounter("indexer_websocket_broadcast_message_total", "The number of total messages sent to all websocket clients.");
+        
         private static readonly ConcurrentDictionary<int, ConnectedWebsocketClient> Clients = new();
 
         private static int _socketCounter;
@@ -32,6 +39,8 @@ namespace CirclesLand.BlockchainIndexer.Api
 
         public static async Task BroadcastMessage(string messageString)
         {
+            BroadcastMessageCount.Inc();
+            
             foreach (var connectedClient in Clients.Values)
             {
                 try
@@ -69,6 +78,8 @@ namespace CirclesLand.BlockchainIndexer.Api
                     _logger.Log(LogLevel.Information,
                         $"Established websocket connection {socketId} with {context.Connection.RemoteIpAddress}:{context.Connection.RemotePort} ..");
                     
+                    ConnectionCount.WithLabels("active").Inc();
+                    
                     if (!Clients.TryAdd(socketId, client))
                     {
                         throw new Exception("Couldn't register the connection at the server.");
@@ -85,12 +96,15 @@ namespace CirclesLand.BlockchainIndexer.Api
                             "A websocket connection experienced an error: " + e.Message);
                         _logger.Log(LogLevel.Trace,
                             "A websocket connection experienced an error: " + e.Message + "\n" + e.StackTrace);
+                        
+                        ConnectionCount.WithLabels("error").Inc();
                     }
                     finally
                     {
                         _logger.Log(LogLevel.Information,
                             $"Removing websocket connection {socketId}");
                         Clients.TryRemove(socketId, out client);
+                        ConnectionCount.WithLabels("active").Dec();
                         try
                         {
                             client?.Dispose();

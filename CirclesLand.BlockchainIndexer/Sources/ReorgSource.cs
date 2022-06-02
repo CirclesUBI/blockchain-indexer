@@ -36,6 +36,8 @@ namespace CirclesLand.BlockchainIndexer.Sources
                         var oldestReorgBlock = await CheckForReorgsInLastBlocks(connection, web3);
                         if (oldestReorgBlock < long.MaxValue)
                         {   
+                            SourceMetrics.BlocksEmitted.WithLabels("reorg").Inc();
+                            
                             return new Option<(HexBigInteger, HexBigInteger)>(
                                 (new HexBigInteger(oldestReorgBlock), new HexBigInteger(oldestReorgBlock)));                            
                         }

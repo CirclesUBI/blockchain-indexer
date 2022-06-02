@@ -9,6 +9,7 @@ using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
 using Nethereum.Hex.HexTypes;
 using Nethereum.Web3;
 using Npgsql;
+using Prometheus;
 
 namespace CirclesLand.BlockchainIndexer.Sources
 {
@@ -61,6 +62,7 @@ namespace CirclesLand.BlockchainIndexer.Sources
                         }
 
                         Console.WriteLine($"Got new block: {currentBlock}");
+                        SourceMetrics.BlocksEmitted.WithLabels("interval").Inc();
 
                         return new Option<(HexBigInteger, HexBigInteger)>((currentBlock, currentBlock));
                     }

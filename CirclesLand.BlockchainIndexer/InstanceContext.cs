@@ -64,8 +64,6 @@ namespace CirclesLand.BlockchainIndexer
             removedRound.BatchSuccess -= RoundOnBatchSuccess;
             removedRound.Error -= RoundOnError;
             removedRound.Disposed -= RoundOnDisposed;
-
-            Interlocked.Increment(ref Statistics.TotalCompletedRounds);
         }
     }
 }

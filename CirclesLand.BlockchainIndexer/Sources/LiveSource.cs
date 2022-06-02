@@ -15,6 +15,7 @@ using Nethereum.RPC.Eth.Subscriptions;
 using Nethereum.Web3;
 using Newtonsoft.Json;
 using Npgsql;
+using Prometheus;
 
 namespace CirclesLand.BlockchainIndexer.Sources;
 
@@ -49,6 +50,7 @@ public class LiveSource
                         var nextBlockToIndex = lastBlock.Value + 1;
                         Console.WriteLine($"Catching up block: {nextBlockToIndex}");
 
+                        SourceMetrics.BlocksEmitted.WithLabels("live").Inc();
                         return new Option<(HexBigInteger, HexBigInteger)>((new HexBigInteger(nextBlockToIndex),
                             new HexBigInteger(nextBlockToIndex)));
                     }
@@ -123,6 +125,7 @@ public class LiveSource
                 throw new Exception($"The live source missed at least one block. Current block: {currentBlock.Value}; Last block: {lastBlock.Value}");
             }
 
+            SourceMetrics.BlocksEmitted.WithLabels("live").Inc();
             return new Option<(HexBigInteger, HexBigInteger)>((currentBlock, currentBlock));     
         });
     }

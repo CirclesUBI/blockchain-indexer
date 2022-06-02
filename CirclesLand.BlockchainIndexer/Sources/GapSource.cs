@@ -13,6 +13,7 @@ using Nethereum.Hex.HexTypes;
 using Nethereum.RPC.Eth.DTOs;
 using Nethereum.Web3;
 using Npgsql;
+using Prometheus;
 
 namespace CirclesLand.BlockchainIndexer.Sources
 {
@@ -54,6 +55,8 @@ namespace CirclesLand.BlockchainIndexer.Sources
                         {
                             var a = _missingBlocks.Dequeue();
                             Logger.Log($"Emitting missing block: {a.ToLong()}");
+                            SourceMetrics.BlocksEmitted.WithLabels("gap").Inc();
+                            
                             return new Option<(HexBigInteger, HexBigInteger)>((a, a));
                         }
                     }
