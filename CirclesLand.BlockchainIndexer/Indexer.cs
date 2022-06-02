@@ -249,7 +249,10 @@ namespace CirclesLand.BlockchainIndexer
                     if (t.Length == 0)
                     {
                         BlockTracker.InsertEmptyBlock(roundContext.Connection, block);
-                        CompleteBatch(flushEveryNthBatch, roundContext, false, Array.Empty<(int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction, TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details)>());
+                        if (Mode == IndexerMode.Live || Mode == IndexerMode.Polling)
+                        {
+                            CompleteBatch(flushEveryNthBatch, roundContext, false, Array.Empty<(int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction, TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details)>());
+                        }
                     }
 
                     var transactions = t
@@ -395,6 +398,8 @@ namespace CirclesLand.BlockchainIndexer
                     
                     CompleteBatch(flushEveryNthBatch, roundContext, false, txArr);
                     HealthService.ReportCompleteBatch(txArr.Max(o => o.Transaction.BlockNumber.ToLong()));
+                    
+                    BatchesTotal.WithLabels("completed").Inc();
                 }, materializer);
         }
 
@@ -446,9 +451,14 @@ namespace CirclesLand.BlockchainIndexer
                 transactionsWithExtractedDetails.ForEach(o => processedBlocks.Add(o.Transaction.BlockNumber.ToLong()));
                 processedBlocks.ForEach(o =>
                 {
-                    LastBlock.WithLabels("imported").Set(o);
                     Statistics.TrackBlockWritten(o);
                 });
+
+                if (processedBlocks.Count > 0)
+                {
+                    var lastProcessedBlock = processedBlocks.Max(o => o);
+                    LastBlock.WithLabels("imported").Set(lastProcessedBlock);
+                }
             }
             
             if ((Mode == IndexerMode.Polling || Mode == IndexerMode.Live)
@@ -460,8 +470,6 @@ namespace CirclesLand.BlockchainIndexer
             {
                 roundContext.OnBatchSuccess();
             }
-
-            BatchesTotal.WithLabels("completed").Inc();
         }
     }
 }
