@@ -110,7 +110,7 @@ namespace CirclesLand.BlockchainIndexer
                 
                 var currentBlock = await  roundContext.Start(lastPersistedBlock);
                 roundContext.Log($"Latest blockchain block: {currentBlock.Value}");
-                LastBlock.WithLabels("at_round_start_live").Set(lastPersistedBlock);
+                LastBlock.WithLabels("at_round_start_live").Set(currentBlock.ToLong());
                 
                 // roundContext.Log($"Checking for reorgs in the last {Settings.UseBulkSourceThreshold} blocks ...");
                 //
@@ -383,7 +383,7 @@ namespace CirclesLand.BlockchainIndexer
                 .Buffer(Settings.MaxWriteToStagingBatchBufferSize, OverflowStrategy.Backpressure)
                 .RunForeach(transactionsWithExtractedDetails =>
                 {
-                    BatchesTotal.WithLabels("started");
+                    BatchesTotal.WithLabels("started").Inc();
                     
                     roundContext.Log($" Writing batch to staging tables ..");
 
@@ -461,7 +461,7 @@ namespace CirclesLand.BlockchainIndexer
                 roundContext.OnBatchSuccess();
             }
 
-            BatchesTotal.WithLabels("completed");
+            BatchesTotal.WithLabels("completed").Inc();
         }
     }
 }
