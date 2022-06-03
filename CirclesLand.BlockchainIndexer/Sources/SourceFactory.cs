@@ -18,9 +18,9 @@ namespace CirclesLand.BlockchainIndexer.Sources
                 Settings.RpcEndpointUrl);
         }
 
-        public async Task<Source<HexBigInteger,NotUsed>> CreateLiveSource()
+        public async Task<Source<HexBigInteger,NotUsed>> CreateLiveSource(long lastPersistedBlock)
         {
-            return await LiveSource.Create(Settings.ConnectionString, Settings.RpcEndpointUrl);
+            return await LiveSource.Create(Settings.ConnectionString, Settings.RpcEndpointUrl, lastPersistedBlock);
         }
 
         public Source<HexBigInteger,NotUsed> CreateReorgSource()

@@ -1,10 +1,14 @@
 using System;
+using System.Data;
 using System.Net.Http.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using CirclesLand.BlockchainIndexer.Api;
 using CirclesLand.BlockchainIndexer.Persistence;
 using CirclesLand.BlockchainIndexer.Sources;
 using CirclesLand.BlockchainIndexer.Util;
+using Nethereum.Hex.HexTypes;
+using Nethereum.JsonRpc.WebSocketClient;
 using Nethereum.Web3;
 using Newtonsoft.Json;
 using Npgsql;
@@ -27,20 +31,19 @@ namespace CirclesLand.BlockchainIndexer
         public DateTime StartAt { get; }
         public long RoundNo { get; }
         public NpgsqlConnection Connection { get; }
-        public Web3 Web3 { get; }
+        public Web3 Web3 { get; private set;  }
         public SourceFactory SourceFactory { get; }
 
         public event EventHandler<RoundErrorEventArgs>? Error;
         public event EventHandler? Disposed;
         public event EventHandler? BatchSuccess;
 
-        public RoundContext(long number, NpgsqlConnection connection, Web3 web3, TimeSpan penalty)
+        public RoundContext(long number, NpgsqlConnection connection, TimeSpan penalty)
         {
             RoundNo = number;
             CreatedAt = DateTime.Now;
             StartAt = CreatedAt + penalty;
             Connection = connection;
-            Web3 = web3;
             SourceFactory = new SourceFactory();
         }
 
@@ -82,6 +85,44 @@ namespace CirclesLand.BlockchainIndexer
         {
             Connection.Dispose();
             Disposed?.Invoke(this, EventArgs.Empty);
+        }
+
+        public async Task<HexBigInteger> Start(long lastPersistedBlock)
+        {
+            var tmpWeb3 = new Web3(Settings.RpcEndpointUrl);
+            var currentBlock = await tmpWeb3
+                .Eth
+                .Blocks
+                .GetBlockNumber
+                .SendRequestAsync();
+            
+            if (currentBlock == null)
+            {
+                throw new Exception("Couldn't request the most recent block from the rpc gateway.");
+            }
+            
+            // Always use http in the first round because it allows for more parallel downloads.
+            // Use websockets afterwards because of the lower latency.
+            var delta = currentBlock.Value - lastPersistedBlock;
+            
+            var catchUpMostLikelyCompleted = 
+                RoundNo > 1 
+                && Statistics.TotalErrorCount < RoundNo
+                && delta < Settings.UseBulkSourceThreshold;
+            
+            if (!catchUpMostLikelyCompleted)
+            {
+                Logger.Log("Using the http connection for the next round.");
+                Web3 = new Web3(Settings.RpcEndpointUrl); 
+            }
+            else
+            {
+                Logger.Log("Using the websocket connection for the next round.");
+                var client = new WebSocketClient(Settings.RpcWsEndpointUrl);
+                Web3 = new Web3(client);
+            }
+
+            return currentBlock;
         }
     }
 }

@@ -7,6 +7,7 @@ using Akka;
 using Akka.Actor;
 using Akka.Streams;
 using Akka.Streams.Dsl;
+using Akka.Util.Internal;
 using CirclesLand.BlockchainIndexer.ABIs;
 using CirclesLand.BlockchainIndexer.Api;
 using CirclesLand.BlockchainIndexer.DetailExtractors;
@@ -18,25 +19,10 @@ using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
 using Nethereum.Hex.HexTypes;
 using Nethereum.RPC.Eth.DTOs;
 using Npgsql;
+using Prometheus;
 
 namespace CirclesLand.BlockchainIndexer
 {
-    public record BlockWithTransaction (
-        long Block, 
-        int TotalTransactionsInBlock, 
-        HexBigInteger Timestamp,
-        Transaction Transactions);
-    
-    public class IndexedBlockEventArgs : EventArgs
-    {
-        public HexBigInteger Block { get; }
-
-        public IndexedBlockEventArgs(HexBigInteger block)
-        {
-            Block = block;
-        }
-    }
-
     public enum IndexerMode
     {
         NotRunning,
@@ -52,18 +38,37 @@ namespace CirclesLand.BlockchainIndexer
         private Source<(int TotalTransactionsInBlock, HexBigInteger Timestamp, Transaction Transaction,
             TransactionReceipt Receipt), NotUsed>? _externalSource;
 
-        public async Task Run(Source<(int TotalTransactionsInBlock, HexBigInteger Timestamp, Transaction Transaction,
-            TransactionReceipt Receipt), NotUsed>? externalSource)
-        {
-            _externalSource = externalSource;
-            
-            var system = ActorSystem.Create("system");
-            var materializer = system.Materializer();
-            var instanceContext = new InstanceContext();
+        private static readonly Counter RoundsTotal =
+            Metrics.CreateCounter("indexer_main_loop_rounds_total", 
+                "Totals of all processed rounds so far", "state");
 
-            await IndexerMain(CancellationToken.None, instanceContext, materializer);
-        }
+        private static readonly Counter BatchesTotal =
+            Metrics.CreateCounter("indexer_main_loop_batches_total", 
+                "Totals of all processed batches so far", "state");
         
+        private static readonly Counter BlocksTotal =
+            Metrics.CreateCounter("indexer_main_loop_blocks_total", 
+                "Totals of all processed blocks so far", "state");
+
+        private static readonly Counter TransactionsTotal =
+            Metrics.CreateCounter("indexer_main_loop_transactions_total",
+                "Totals of all processed transactions so far", "state");
+
+        private static readonly Counter EventsTotal =
+            Metrics.CreateCounter("indexer_main_loop_events_total",
+                "Totals of all processed events so far", "type");
+
+        private static readonly Counter SafeOwnershipChecksTotal =
+            Metrics.CreateCounter("indexer_main_loop_safe_ownership_checks_total",
+                "Totals of all processed events so far");
+
+        private static readonly Counter ReceiptsTotal =
+            Metrics.CreateCounter("indexer_main_loop_receipts_total", 
+                "Totals of all processed receipts so far", "state");
+        
+        private static readonly Gauge LastBlock = Metrics
+            .CreateGauge("indexer_main_loop_last_processed_block_no", "The block number of the last processed block. Should only every go up. Down indicates something went wrong.", "state");
+
         public async Task Run(CancellationToken cancellationToken)
         {
             var system = ActorSystem.Create("system");
@@ -80,6 +85,7 @@ namespace CirclesLand.BlockchainIndexer
             ActorMaterializer materializer)
         {
             var roundContext = instanceContext.CreateRoundContext();
+            RoundsTotal.WithLabels("started").Inc();
 
             try
             {
@@ -91,21 +97,34 @@ namespace CirclesLand.BlockchainIndexer
                 }
 
                 roundContext.Log($"Round {roundContext.RoundNo} started at {DateTime.Now}.");
+
+                roundContext.Log($" Importing from staging tables ..");
+                ImportProcedure.ImportFromStaging(roundContext.Connection, Settings.BulkFlushTimeoutInSeconds);
                 
                 roundContext.Log($"Finding the last persisted block ..");
                 var lastPersistedBlock = roundContext.GetLastValidBlock();
+                LastBlock.WithLabels("at_round_start_imported").Set(lastPersistedBlock);
                 roundContext.Log($"Last persisted block: {lastPersistedBlock}");
-                
-                roundContext.Log($"Finding the latest blockchain block ..");
-                var currentBlock = await roundContext
-                    .Web3
-                    .Eth
-                    .Blocks
-                    .GetBlockNumber
-                    .SendRequestAsync();
-                
-                roundContext.Log($"Latest blockchain block: {currentBlock.Value}");
 
+                roundContext.Log($"Finding the latest blockchain block ..");
+                
+                var currentBlock = await  roundContext.Start(lastPersistedBlock);
+                roundContext.Log($"Latest blockchain block: {currentBlock.Value}");
+                LastBlock.WithLabels("at_round_start_live").Set(currentBlock.ToLong());
+                
+                // roundContext.Log($"Checking for reorgs in the last {Settings.UseBulkSourceThreshold} blocks ...");
+                //
+                // using (var connection = new NpgsqlConnection(Settings.ConnectionString))
+                // {
+                //     connection.Open();
+                //     var web3 = new Web3(Settings.RpcEndpointUrl);
+                //     var lastReorgAt = await ReorgSource.CheckForReorgsInLastBlocks(connection, web3, lastPersistedBlock, Settings.UseBulkSourceThreshold);
+                //     if (lastReorgAt < long.MaxValue)
+                //     {
+                //         roundContext.Log($"Reorg at: {lastReorgAt}");
+                //     }
+                // }
+                
                 Source<(int TotalTransactionsInBlock, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt Receipt), NotUsed>? activeSource;
 
@@ -116,16 +135,18 @@ namespace CirclesLand.BlockchainIndexer
                         currentBlock);
                     
                     var reorgSource = roundContext.SourceFactory.CreateReorgSource();
-                    var combinedSource = Source.Combine(reorgSource, source, i => new Merge<HexBigInteger>(i));
-
+                    var combinedSource1 = Source.Combine(reorgSource, source, i => new Merge<HexBigInteger>(i));
+                    var combinedSerialSource = Source.Combine(combinedSource1, GapSource.Create(120000, Settings.ConnectionString), i => new Merge<HexBigInteger>(i));
+                    var combinedBulkSource = Source.Combine(source, GapSource.Create(120000, Settings.ConnectionString, true), i => new Merge<HexBigInteger>(i));
+                    
                     flushEveryNthBatch = Mode == IndexerMode.CatchUp 
                         ? Settings.BulkFlushInterval 
                         : Settings.SerialFlushInterval;
                     
                     activeSource = TransactionAndReceiptSource(
-                        Mode == IndexerMode.CatchUp 
-                            ? source
-                            : combinedSource, 
+                        Mode == IndexerMode.CatchUp
+                            ? combinedBulkSource
+                            : combinedSerialSource, 
                         roundContext, 
                         flushEveryNthBatch);
                 }
@@ -142,10 +163,14 @@ namespace CirclesLand.BlockchainIndexer
 
                 await RunStream(materializer, activeSource, roundContext, flushEveryNthBatch);
 
-                Logger.Log($"Completed the stream.");
+                Logger.Log($"Completed the stream. Running last import of this round ..");
+                CompleteBatch(flushEveryNthBatch, roundContext, true, Array.Empty<(int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction, TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details)>());
+                
+                RoundsTotal.WithLabels("finished").Inc();
             }
             catch (Exception ex)
             {
+                RoundsTotal.WithLabels("failed").Inc();
                 roundContext.OnError(ex);
             }
         }
@@ -157,30 +182,46 @@ namespace CirclesLand.BlockchainIndexer
             return source
                 .Select(o =>
                 {
-                    if (ReorgSource.BlockReorgsSharedState.Contains(o.ToLong()))
+                    BlocksTotal.WithLabels("known").Inc();
+                    LastBlock.WithLabels("from_source").Set(o.ToUlong());
+                    
+                    if (ReorgSource.BlockReorgsSharedState.Count > 0)
                     {
+                        var lastReorgBlock = ReorgSource.BlockReorgsSharedState.Min();
+                        
                         var color = Console.ForegroundColor;
                         Console.ForegroundColor = ConsoleColor.Magenta;
-                        Console.WriteLine($"Processing reorg starting at {o.ToLong()} ...");
+                        LastBlock.WithLabels("reorg_at").Set(lastReorgBlock);
+                        Console.WriteLine($"Processing reorg starting at {lastReorgBlock} ...");
                         Console.ForegroundColor = color;
 
                         using var connection = new NpgsqlConnection(Settings.ConnectionString);
                         connection.Open();
                         
                         Console.ForegroundColor = ConsoleColor.Magenta;
-                        Console.WriteLine($"Deleting all data >= block ${o.ToLong()} ...");
+                        Console.WriteLine($"Deleting all data >= block {lastReorgBlock} ...");
                         Console.ForegroundColor = color;
                         
                         var tx = connection.BeginTransaction();
-                        new NpgsqlCommand($"delete from crc_hub_transfer_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from crc_organisation_signup_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from crc_signup_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from crc_trust_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from erc20_transfer_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from eth_transfer_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from gnosis_safe_eth_transfer_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from transaction_2 where block_number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from block where number >= {o.ToLong()}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from crc_hub_transfer_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from crc_organisation_signup_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from crc_signup_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from crc_trust_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from erc20_transfer_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from eth_transfer_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from gnosis_safe_eth_transfer_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from transaction_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand($"delete from block where number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        
+                        Console.WriteLine($"Deleting the contents of all staging tables ...");
+                        new NpgsqlCommand("delete from _crc_hub_transfer_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _crc_organisation_signup_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _crc_signup_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _crc_trust_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _erc20_transfer_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _eth_transfer_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _gnosis_safe_eth_transfer_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _transaction_staging;", connection, tx).ExecuteNonQuery();
 
                         tx.Commit();
                         connection.Close();
@@ -200,22 +241,29 @@ namespace CirclesLand.BlockchainIndexer
                 })
                 // Get the full block with all transactions
                 .SelectAsync(Settings.MaxParallelBlockDownloads, currentBlockNo =>
-                    roundContext.Web3.Eth.Blocks
+                {
+                    BlocksTotal.WithLabels("download_started").Inc();
+                    
+                    return roundContext.Web3.Eth.Blocks
                         .GetBlockWithTransactionsByNumber
-                        .SendRequestAsync(currentBlockNo))
+                        .SendRequestAsync(currentBlockNo);
+                })
                 .Buffer(Settings.MaxDownloadedBlockBufferSize, OverflowStrategy.Backpressure)
                 // Bundle the every transaction in a block with the block timestamp and send it downstream
                 .SelectMany(block =>
                 {
-                    Interlocked.Increment(ref Statistics.TotalDownloadedBlocks);
+                    BlocksTotal.WithLabels("download_finished").Inc();
 
                     var t = block.Transactions.ToArray();
-                    Interlocked.Add(ref Statistics.TotalDownloadedTransactions, t.Length);
+                    TransactionsTotal.WithLabels("downloaded").Inc(t.Length);
 
                     if (t.Length == 0)
                     {
                         BlockTracker.InsertEmptyBlock(roundContext.Connection, block);
-                        CompleteBatch(flushEveryNthBatch, roundContext);
+                        if (Mode == IndexerMode.Live || Mode == IndexerMode.Polling)
+                        {
+                            CompleteBatch(flushEveryNthBatch, roundContext, false, Array.Empty<(int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction, TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details)>());
+                        }
                     }
 
                     var transactions = t
@@ -231,11 +279,13 @@ namespace CirclesLand.BlockchainIndexer
                 // Add the receipts for every transaction
                 .SelectAsync(Settings.MaxParallelReceiptDownloads, async timestampAndTransaction =>
                 {
+                    ReceiptsTotal.WithLabels("download_started").Inc();
+                    
                     var receipt = await roundContext.Web3.Eth.Transactions.GetTransactionReceipt
                         .SendRequestAsync(
                             timestampAndTransaction.Transaction.TransactionHash);
 
-                    Interlocked.Increment(ref Statistics.TotalDownloadedReceipts);
+                    ReceiptsTotal.WithLabels("download_finished").Inc();
 
                     return (
                         TotalTransactionsInBlock: timestampAndTransaction.TotalTransactionsInBlock,
@@ -261,6 +311,31 @@ namespace CirclesLand.BlockchainIndexer
                             transactionAndReceipt.Transaction,
                             transactionAndReceipt.Receipt,
                             null);
+
+                    if (classification.HasFlag(TransactionClass.CrcSignup)) {
+                        EventsTotal.WithLabels("crc_signup").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.CrcTrust)) {
+                        EventsTotal.WithLabels("crc_trust").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.Erc20Transfer)) {
+                        EventsTotal.WithLabels("erc20_transfer").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.CrcHubTransfer)) {
+                        EventsTotal.WithLabels("crc_hub_transfer").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.CrcOrganisationSignup)) {
+                        EventsTotal.WithLabels("crc_organization_signup").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.EoaEthTransfer)) {
+                        EventsTotal.WithLabels("eoa_eth_transfer").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.SafeEthTransfer)) {
+                        EventsTotal.WithLabels("safe_eth_transfer").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.Unknown)) {
+                        EventsTotal.WithLabels("other").Inc();
+                    }
 
                     return (
                         TotalTransactionsInBlock: transactionAndReceipt.TotalTransactionsInBlock,
@@ -289,6 +364,8 @@ namespace CirclesLand.BlockchainIndexer
 
                     foreach (var signup in signups)
                     {
+                        SafeOwnershipChecksTotal.Inc();
+                        
                         var contract = roundContext.Web3.Eth.GetContract(
                             GnosisSafeABI.Json, signup.User);
                         var function = contract.GetFunction("getOwners");
@@ -302,11 +379,20 @@ namespace CirclesLand.BlockchainIndexer
 
                     foreach (var organisationSignup in organisationSignups)
                     {
-                        var contract = roundContext.Web3.Eth.GetContract(
-                            GnosisSafeABI.Json, organisationSignup.Organization);
-                        var function = contract.GetFunction("getOwners");
-                        var owners = (await function.CallAsync<List<string>>()) ?? new List<string>();
-                        organisationSignup.Owners = owners.Select(o => o.ToLower()).ToArray();
+                        try
+                        {
+                            SafeOwnershipChecksTotal.Inc();
+                            
+                            var contract = roundContext.Web3.Eth.GetContract(
+                                GnosisSafeABI.Json, organisationSignup.Organization);
+                            var function = contract.GetFunction("getOwners");
+                            var owners = (await function.CallAsync<List<string>>()) ?? new List<string>();
+                            organisationSignup.Owners = owners.Select(o => o.ToLower()).ToArray();
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(ex.Message + "\n" + ex.StackTrace);
+                        }
                     }
 
                     return (
@@ -324,6 +410,8 @@ namespace CirclesLand.BlockchainIndexer
                 .Buffer(Settings.MaxWriteToStagingBatchBufferSize, OverflowStrategy.Backpressure)
                 .RunForeach(transactionsWithExtractedDetails =>
                 {
+                    BatchesTotal.WithLabels("started").Inc();
+                    
                     roundContext.Log($" Writing batch to staging tables ..");
 
                     var txArr = transactionsWithExtractedDetails.ToArray();
@@ -331,9 +419,11 @@ namespace CirclesLand.BlockchainIndexer
                     TransactionsWriter.WriteTransactions(
                         roundContext.Connection,
                         txArr);
-
-                    CompleteBatch(flushEveryNthBatch, roundContext);
+                    
+                    CompleteBatch(flushEveryNthBatch, roundContext, false, txArr);
                     HealthService.ReportCompleteBatch(txArr.Max(o => o.Transaction.BlockNumber.ToLong()));
+                    
+                    BatchesTotal.WithLabels("completed").Inc();
                 }, materializer);
         }
 
@@ -353,22 +443,22 @@ namespace CirclesLand.BlockchainIndexer
             }
             else
             {
-                roundContext.Log($"Found {delta} blocks to catch up. Using the 'Polling' source.");
-                Mode = IndexerMode.Polling;
-                source = roundContext.SourceFactory.CreatePollingSource();
+                // roundContext.Log($"Found {delta} blocks to catch up. Using the 'Polling' source.");
+                // Mode = IndexerMode.Polling;
+                // source = roundContext.SourceFactory.CreatePollingSource();
 
-                // roundContext.Log($"Found {delta} blocks to catch up. Using the 'Live' source.");
-                // Mode = IndexerMode.Live;
-                // source = await roundContext.SourceFactory.CreateLiveSource();
+                roundContext.Log($"Found {delta} blocks to catch up. Using the 'Live' source.");
+                Mode = IndexerMode.Live;
+                source = await roundContext.SourceFactory.CreateLiveSource(lastPersistedBlock);
             }
 
             return source;
         }
 
-        private void CompleteBatch(int flushEveryNthBatch, RoundContext roundContext)
+        private void CompleteBatch(int flushEveryNthBatch, RoundContext roundContext, bool forceFlush, (int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction, TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details)[] transactionsWithExtractedDetails)
         {
             string[] writtenTransactions = { };
-            if (Statistics.TotalProcessedBatches % flushEveryNthBatch == 0)
+            if (Statistics.TotalProcessedBatches % flushEveryNthBatch == 0 || forceFlush)
             {
                 roundContext.Log($" Importing from staging tables ..");
                 ImportProcedure.ImportFromStaging(roundContext.Connection
@@ -378,6 +468,21 @@ namespace CirclesLand.BlockchainIndexer
 
                 roundContext.Log($" Cleaning staging tables ..");
                 writtenTransactions = StagingTables.CleanImported(roundContext.Connection);
+                
+                TransactionsTotal.WithLabels("imported").Inc(writtenTransactions.Length);
+                
+                var processedBlocks = new HashSet<long>();
+                transactionsWithExtractedDetails.ForEach(o => processedBlocks.Add(o.Transaction.BlockNumber.ToLong()));
+                processedBlocks.ForEach(o =>
+                {
+                    Statistics.TrackBlockWritten(o);
+                });
+
+                if (processedBlocks.Count > 0)
+                {
+                    var lastProcessedBlock = processedBlocks.Max(o => o);
+                    LastBlock.WithLabels("imported").Set(lastProcessedBlock);
+                }
             }
             
             if ((Mode == IndexerMode.Polling || Mode == IndexerMode.Live)
@@ -388,11 +493,6 @@ namespace CirclesLand.BlockchainIndexer
             else
             {
                 roundContext.OnBatchSuccess();
-            }
-            
-            if (Statistics.TotalProcessedBatches % flushEveryNthBatch == 0)
-            {
-                Statistics.Print();
             }
         }
     }

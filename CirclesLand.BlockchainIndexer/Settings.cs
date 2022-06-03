@@ -9,6 +9,7 @@ namespace CirclesLand.BlockchainIndexer
     {
         public static readonly string ConnectionString;
         public static readonly string RpcEndpointUrl;
+        public static readonly string? RpcWsEndpointUrl;
         public static readonly string WebsocketServerUrl;
         
         public static readonly int DelayStartup;
@@ -122,9 +123,19 @@ namespace CirclesLand.BlockchainIndexer
             }
 
             if (!Uri.TryCreate(Environment.GetEnvironmentVariable("INDEXER_RPC_GATEWAY_URL"), UriKind.Absolute, 
-                out var rpcGatewayUri))
+                    out var rpcGatewayUri))
             {
                 validationErrors.Add("Couldn't parse the 'INDEXER_RPC_GATEWAY_URL' environment variable. Expected 'System.Uri'.");
+            }
+
+            if (!Uri.TryCreate(Environment.GetEnvironmentVariable("INDEXER_RPC_GATEWAY_WS_URL"), UriKind.Absolute, 
+                    out var rpcGatewayWsUri))
+            {
+                if (rpcGatewayUri == null)
+                {
+                    validationErrors.Add(
+                        "Couldn't parse the 'INDEXER_RPC_GATEWAY_WS_URL' environment variable. Expected 'System.Uri'.");
+                }
             }
 
             if (!Uri.TryCreate(Environment.GetEnvironmentVariable("INDEXER_WEBSOCKET_URL"), UriKind.Absolute,
@@ -144,10 +155,13 @@ namespace CirclesLand.BlockchainIndexer
             RpcEndpointUrl = rpcGatewayUri?.ToString() ?? "null";
             ValidSettings.Add("INDEXER_RPC_GATEWAY_URL", (RpcEndpointUrl, false));
             
+            RpcWsEndpointUrl = rpcGatewayWsUri?.ToString() ?? "null";
+            ValidSettings.Add("INDEXER_RPC_GATEWAY_WS_URL", (RpcWsEndpointUrl, false));
+            
             WebsocketServerUrl = websocketUrl?.ToString() ?? "null";
             ValidSettings.Add("INDEXER_WEBSOCKET_URL", (WebsocketServerUrl, false));
             
-            UseBulkSourceThreshold = TryGetIntEnvVar("USE_BULK_SOURCE_THRESHOLD", 80);
+            UseBulkSourceThreshold = TryGetIntEnvVar("USE_BULK_SOURCE_THRESHOLD", 32);
             BulkFlushInterval = TryGetIntEnvVar("BULK_FLUSH_INTERVAL_IN_BLOCKS", 10);
             BulkFlushTimeoutInSeconds = TryGetIntEnvVar("BULK_FLUSH_TIMEOUT_IN_SECONDS", 240);
             SerialFlushInterval = TryGetIntEnvVar("SERIAL_FLUSH_INTERVAL_IN_BLOCKS",1 );
@@ -156,9 +170,9 @@ namespace CirclesLand.BlockchainIndexer
             MaxErrorRestartPenaltyInMs = TryGetIntEnvVar("MAX_ERROR_RESTART_PENALTY_IN_MILLISECONDS", 1000 * 60 * 4);
             PollingIntervalInMs = TryGetIntEnvVar("POLLING_INTERVAL_IN_MILLISECONDS", 500);
             MaxParallelBlockDownloads = TryGetIntEnvVar("MAX_PARALLEL_BLOCK_DOWNLOADS", 24);
-            MaxDownloadedBlockBufferSize = TryGetIntEnvVar("MAX_BLOCK_BUFFER_SIZE", 24 * 25);
+            MaxDownloadedBlockBufferSize = TryGetIntEnvVar("MAX_BLOCK_BUFFER_SIZE", MaxParallelBlockDownloads * 25);
             MaxParallelReceiptDownloads = TryGetIntEnvVar("MAX_PARALLEL_RECEIPT_DOWNLOADS", 96);
-            MaxDownloadedTransactionsBufferSize = TryGetIntEnvVar("MAX_TRANSACTION_BUFFER_SIZE", 96 * 25);
+            MaxDownloadedTransactionsBufferSize = TryGetIntEnvVar("MAX_TRANSACTION_BUFFER_SIZE", MaxParallelReceiptDownloads * 25);
             MaxDownloadedReceiptsBufferSize = TryGetIntEnvVar("MAX_RECEIPT_BUFFER_SIZE", 96 * 25);
             WriteToStagingBatchSize = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_SIZE", 2000);
             WriteToStagingBatchMaxIntervalInSeconds = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_MAX_INTERVAL_IN_SECONDS", 5);

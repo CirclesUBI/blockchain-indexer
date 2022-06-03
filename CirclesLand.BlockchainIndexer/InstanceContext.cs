@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
-using CirclesLand.BlockchainIndexer.Persistence;
-using Nethereum.Web3;
 using Npgsql;
 
 namespace CirclesLand.BlockchainIndexer
@@ -21,7 +19,6 @@ namespace CirclesLand.BlockchainIndexer
             var connection = GetConnection();
             connection.Open();
             
-            var web3 = new Web3(Settings.RpcEndpointUrl);
             var roundNo = Interlocked.Increment(ref Statistics.TotalStartedRounds);
 
             var penalty = Settings.ErrorRestartPenaltyInMs *
@@ -30,7 +27,7 @@ namespace CirclesLand.BlockchainIndexer
                 ? Settings.MaxErrorRestartPenaltyInMs
                 : penalty;
 
-            var round = new RoundContext(roundNo, connection, web3, TimeSpan.FromMilliseconds(penalty));
+            var round = new RoundContext(roundNo, connection, TimeSpan.FromMilliseconds(penalty));
 
             round.BatchSuccess += RoundOnBatchSuccess;
             round.Error += RoundOnError;
@@ -67,8 +64,6 @@ namespace CirclesLand.BlockchainIndexer
             removedRound.BatchSuccess -= RoundOnBatchSuccess;
             removedRound.Error -= RoundOnError;
             removedRound.Disposed -= RoundOnDisposed;
-
-            Interlocked.Increment(ref Statistics.TotalCompletedRounds);
         }
     }
 }
