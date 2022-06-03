@@ -136,8 +136,8 @@ namespace CirclesLand.BlockchainIndexer
                     
                     var reorgSource = roundContext.SourceFactory.CreateReorgSource();
                     var combinedSource1 = Source.Combine(reorgSource, source, i => new Merge<HexBigInteger>(i));
-                    var combinedSerialSource = Source.Combine(combinedSource1, GapSource.Create(60000, Settings.ConnectionString), i => new Merge<HexBigInteger>(i));
-                    var combinedBulkSource = Source.Combine(source, GapSource.Create(60000, Settings.ConnectionString, true), i => new Merge<HexBigInteger>(i));
+                    var combinedSerialSource = Source.Combine(combinedSource1, GapSource.Create(120000, Settings.ConnectionString), i => new Merge<HexBigInteger>(i));
+                    var combinedBulkSource = Source.Combine(source, GapSource.Create(120000, Settings.ConnectionString, true), i => new Merge<HexBigInteger>(i));
                     
                     flushEveryNthBatch = Mode == IndexerMode.CatchUp 
                         ? Settings.BulkFlushInterval 
