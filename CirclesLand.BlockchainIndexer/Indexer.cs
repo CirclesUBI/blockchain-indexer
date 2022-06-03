@@ -191,6 +191,7 @@ namespace CirclesLand.BlockchainIndexer
                         
                         var color = Console.ForegroundColor;
                         Console.ForegroundColor = ConsoleColor.Magenta;
+                        LastBlock.WithLabels("reorg_at").Set(lastReorgBlock);
                         Console.WriteLine($"Processing reorg starting at {lastReorgBlock} ...");
                         Console.ForegroundColor = color;
 
@@ -198,7 +199,7 @@ namespace CirclesLand.BlockchainIndexer
                         connection.Open();
                         
                         Console.ForegroundColor = ConsoleColor.Magenta;
-                        Console.WriteLine($"Deleting all data >= block ${lastReorgBlock} ...");
+                        Console.WriteLine($"Deleting all data >= block {lastReorgBlock} ...");
                         Console.ForegroundColor = color;
                         
                         var tx = connection.BeginTransaction();
@@ -211,6 +212,16 @@ namespace CirclesLand.BlockchainIndexer
                         new NpgsqlCommand($"delete from gnosis_safe_eth_transfer_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
                         new NpgsqlCommand($"delete from transaction_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
                         new NpgsqlCommand($"delete from block where number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+                        
+                        Console.WriteLine($"Deleting the contents of all staging tables ...");
+                        new NpgsqlCommand("delete from _crc_hub_transfer_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _crc_organisation_signup_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _crc_signup_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _crc_trust_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _erc20_transfer_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _eth_transfer_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _gnosis_safe_eth_transfer_staging;", connection, tx).ExecuteNonQuery();
+                        new NpgsqlCommand("delete from _transaction_staging;", connection, tx).ExecuteNonQuery();
 
                         tx.Commit();
                         connection.Close();
@@ -301,16 +312,29 @@ namespace CirclesLand.BlockchainIndexer
                             transactionAndReceipt.Receipt,
                             null);
 
-                    switch (classification)
-                    {
-                        case TransactionClass.CrcSignup: EventsTotal.WithLabels("crc_signup").Inc(); break;
-                        case TransactionClass.CrcTrust: EventsTotal.WithLabels("crc_trust").Inc(); break;
-                        case TransactionClass.Erc20Transfer: EventsTotal.WithLabels("erc20_transfer").Inc(); break;
-                        case TransactionClass.CrcHubTransfer: EventsTotal.WithLabels("crc_hub_transfer").Inc();break;
-                        case TransactionClass.CrcOrganisationSignup:  EventsTotal.WithLabels("crc_organization_signup").Inc();break;
-                        case TransactionClass.EoaEthTransfer:  EventsTotal.WithLabels("eoa_eth_transfer").Inc();break;
-                        case TransactionClass.SafeEthTransfer: EventsTotal.WithLabels("safe_eth_transfer").Inc();break;
-                        default: EventsTotal.WithLabels("other").Inc(); break;
+                    if (classification.HasFlag(TransactionClass.CrcSignup)) {
+                        EventsTotal.WithLabels("crc_signup").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.CrcTrust)) {
+                        EventsTotal.WithLabels("crc_trust").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.Erc20Transfer)) {
+                        EventsTotal.WithLabels("erc20_transfer").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.CrcHubTransfer)) {
+                        EventsTotal.WithLabels("crc_hub_transfer").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.CrcOrganisationSignup)) {
+                        EventsTotal.WithLabels("crc_organization_signup").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.EoaEthTransfer)) {
+                        EventsTotal.WithLabels("eoa_eth_transfer").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.SafeEthTransfer)) {
+                        EventsTotal.WithLabels("safe_eth_transfer").Inc();
+                    }
+                    if (classification.HasFlag(TransactionClass.Unknown)) {
+                        EventsTotal.WithLabels("other").Inc();
                     }
 
                     return (
