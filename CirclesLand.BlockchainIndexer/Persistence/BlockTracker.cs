@@ -16,7 +16,6 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 @"with a as (
                         select distinct block_no
                         from requested_blocks
-
                         order by block_no
                     ), b as (
                         select distinct number
