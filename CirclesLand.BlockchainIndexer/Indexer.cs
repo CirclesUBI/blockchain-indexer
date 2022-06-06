@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -97,6 +98,12 @@ namespace CirclesLand.BlockchainIndexer
                 }
 
                 roundContext.Log($"Round {roundContext.RoundNo} started at {DateTime.Now}.");
+                
+                if (ReorgSource.BlockReorgsSharedState.Count > 0)
+                {
+                    CleanupAfterReorg();
+                    ReorgSource.BlockReorgsSharedState.Clear();
+                }
 
                 roundContext.Log($" Importing from staging tables ..");
                 ImportProcedure.ImportFromStaging(roundContext.Connection, Settings.BulkFlushTimeoutInSeconds);
@@ -187,47 +194,7 @@ namespace CirclesLand.BlockchainIndexer
                     
                     if (ReorgSource.BlockReorgsSharedState.Count > 0)
                     {
-                        var lastReorgBlock = ReorgSource.BlockReorgsSharedState.Min();
-                        
                         var color = Console.ForegroundColor;
-                        Console.ForegroundColor = ConsoleColor.Magenta;
-                        LastBlock.WithLabels("reorg_at").Set(lastReorgBlock);
-                        Console.WriteLine($"Processing reorg starting at {lastReorgBlock} ...");
-                        Console.ForegroundColor = color;
-
-                        using var connection = new NpgsqlConnection(Settings.ConnectionString);
-                        connection.Open();
-                        
-                        Console.ForegroundColor = ConsoleColor.Magenta;
-                        Console.WriteLine($"Deleting all data >= block {lastReorgBlock} ...");
-                        Console.ForegroundColor = color;
-                        
-                        var tx = connection.BeginTransaction();
-                        new NpgsqlCommand($"delete from crc_hub_transfer_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from crc_organisation_signup_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from crc_signup_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from crc_trust_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from erc20_transfer_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from eth_transfer_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from gnosis_safe_eth_transfer_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from transaction_2 where block_number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand($"delete from block where number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
-                        
-                        Console.WriteLine($"Deleting the contents of all staging tables ...");
-                        new NpgsqlCommand("delete from _crc_hub_transfer_staging;", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand("delete from _crc_organisation_signup_staging;", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand("delete from _crc_signup_staging;", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand("delete from _crc_trust_staging;", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand("delete from _erc20_transfer_staging;", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand("delete from _eth_transfer_staging;", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand("delete from _gnosis_safe_eth_transfer_staging;", connection, tx).ExecuteNonQuery();
-                        new NpgsqlCommand("delete from _transaction_staging;", connection, tx).ExecuteNonQuery();
-
-                        tx.Commit();
-                        connection.Close();
-                        
-                        ReorgSource.BlockReorgsSharedState.Clear();
-                        
                         Console.ForegroundColor = ConsoleColor.Magenta;
                         Console.WriteLine($"Restarting ..");
                         Console.ForegroundColor = color;
@@ -295,6 +262,58 @@ namespace CirclesLand.BlockchainIndexer
                     );
                 })
                 .Buffer(Settings.MaxDownloadedReceiptsBufferSize, OverflowStrategy.Backpressure);
+        }
+
+        private static void CleanupAfterReorg()
+        {
+            var lastReorgBlock = ReorgSource.BlockReorgsSharedState.Min();
+
+            var color = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            LastBlock.WithLabels("reorg_at").Set(lastReorgBlock);
+            Console.WriteLine($"Processing reorg starting at {lastReorgBlock} ...");
+            Console.ForegroundColor = color;
+
+            using var connection = new NpgsqlConnection(Settings.ConnectionString);
+            connection.Open();
+
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.WriteLine($"Deleting all data >= block {lastReorgBlock} ...");
+            Console.ForegroundColor = color;
+
+            var tx = connection.BeginTransaction(IsolationLevel.Serializable);
+            new NpgsqlCommand($"delete from crc_hub_transfer_2 where block_number >= {lastReorgBlock}", connection, tx)
+                .ExecuteNonQuery();
+            new NpgsqlCommand($"delete from crc_organisation_signup_2 where block_number >= {lastReorgBlock}", connection, tx)
+                .ExecuteNonQuery();
+            new NpgsqlCommand($"delete from crc_signup_2 where block_number >= {lastReorgBlock}", connection, tx)
+                .ExecuteNonQuery();
+            new NpgsqlCommand($"delete from crc_trust_2 where block_number >= {lastReorgBlock}", connection, tx)
+                .ExecuteNonQuery();
+            new NpgsqlCommand($"delete from erc20_transfer_2 where block_number >= {lastReorgBlock}", connection, tx)
+                .ExecuteNonQuery();
+            new NpgsqlCommand($"delete from eth_transfer_2 where block_number >= {lastReorgBlock}", connection, tx)
+                .ExecuteNonQuery();
+            new NpgsqlCommand($"delete from gnosis_safe_eth_transfer_2 where block_number >= {lastReorgBlock}", connection, tx)
+                .ExecuteNonQuery();
+            new NpgsqlCommand($"delete from transaction_2 where block_number >= {lastReorgBlock}", connection, tx)
+                .ExecuteNonQuery();
+            new NpgsqlCommand($"delete from block where number >= {lastReorgBlock}", connection, tx).ExecuteNonQuery();
+
+            Console.WriteLine($"Deleting the contents of all staging tables ...");
+            new NpgsqlCommand("delete from _crc_hub_transfer_staging;", connection, tx).ExecuteNonQuery();
+            new NpgsqlCommand("delete from _crc_organisation_signup_staging;", connection, tx).ExecuteNonQuery();
+            new NpgsqlCommand("delete from _crc_signup_staging;", connection, tx).ExecuteNonQuery();
+            new NpgsqlCommand("delete from _crc_trust_staging;", connection, tx).ExecuteNonQuery();
+            new NpgsqlCommand("delete from _erc20_transfer_staging;", connection, tx).ExecuteNonQuery();
+            new NpgsqlCommand("delete from _eth_transfer_staging;", connection, tx).ExecuteNonQuery();
+            new NpgsqlCommand("delete from _gnosis_safe_eth_transfer_staging;", connection, tx).ExecuteNonQuery();
+            new NpgsqlCommand("delete from _transaction_staging;", connection, tx).ExecuteNonQuery();
+
+            tx.Commit();
+            connection.Close();
+
+            ReorgSource.BlockReorgsSharedState.Clear();
         }
 
         private async Task RunStream(ActorMaterializer materializer, 
