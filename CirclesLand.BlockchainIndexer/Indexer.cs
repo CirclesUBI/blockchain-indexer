@@ -430,8 +430,8 @@ namespace CirclesLand.BlockchainIndexer
                         Details: extractedDetails
                     );
                 })
-                .GroupedWithin(Settings.WriteToStagingBatchSize, TimeSpan.FromSeconds(Mode == IndexerMode.CatchUp ? Settings.WriteToStagingBatchMaxIntervalInSeconds : 1))
-                .Buffer(Mode == IndexerMode.CatchUp ? Settings.MaxWriteToStagingBatchBufferSize : 1, OverflowStrategy.Backpressure)
+                .Buffer(Mode == IndexerMode.CatchUp ? Settings.MaxWriteToStagingBatchBufferSize : 10, OverflowStrategy.Backpressure)
+                .GroupedWithin(Settings.WriteToStagingBatchSize, TimeSpan.FromMilliseconds(Mode == IndexerMode.CatchUp ? Settings.WriteToStagingBatchMaxIntervalInSeconds * 1000 : 500))
                 .RunForeach(transactionsWithExtractedDetails =>
                 {
                     BatchesTotal.WithLabels("started").Inc();
