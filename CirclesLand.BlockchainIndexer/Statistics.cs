@@ -35,7 +35,7 @@ public static class Statistics
         }
         
         var runtime = DateTime.Now - startTime;
-        BlockImportDuration.Set(runtime.Milliseconds);
+        BlockImportDuration.Set(runtime.TotalMilliseconds);
         Console.WriteLine($"Block {block} took {runtime} to process.");
     }
     /*
