@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using Prometheus;
 
 namespace CirclesLand.BlockchainIndexer;
 
@@ -11,6 +12,10 @@ public static class Statistics
     public static long ImmediateErrorCount;
     public static long TotalStartedRounds;
     public static long TotalErrorCount;
+        
+    private static readonly Gauge BlockImportDuration =
+        Metrics.CreateGauge("indexer_block_import_duration", 
+            "How long the last block took to import from start to finish.", "state");
 
     public static void TrackBlockEnter(long block)
     {
@@ -30,6 +35,7 @@ public static class Statistics
         }
         
         var runtime = DateTime.Now - startTime;
+        BlockImportDuration.Set(runtime.TotalMilliseconds);
         Console.WriteLine($"Block {block} took {runtime} to process.");
     }
     /*

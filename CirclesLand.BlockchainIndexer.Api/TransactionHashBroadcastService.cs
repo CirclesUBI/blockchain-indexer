@@ -10,7 +10,7 @@ using Prometheus;
 
 namespace CirclesLand.BlockchainIndexer.Api
 {
-    public class WebsocketService : IMiddleware
+    public class TransactionHashBroadcastService : IMiddleware
     {
         private static readonly Gauge ConnectionCount = Metrics
             .CreateGauge("indexer_websocket_connection_count", "The number of current websocket connections.", "state");
@@ -24,9 +24,9 @@ namespace CirclesLand.BlockchainIndexer.Api
         private static bool _serverIsRunning = true;
 
         private static CancellationTokenRegistration _appShutdownHandler;
-        private readonly ILogger<WebsocketService> _logger;
+        private readonly ILogger<TransactionHashBroadcastService> _logger;
 
-        public WebsocketService(IHostApplicationLifetime hostLifetime, ILogger<WebsocketService> logger)
+        public TransactionHashBroadcastService(IHostApplicationLifetime hostLifetime, ILogger<TransactionHashBroadcastService> logger)
         {
             // gracefully close all websockets during shutdown (only register on first instantiation)
             if (_appShutdownHandler.Token.Equals(CancellationToken.None))

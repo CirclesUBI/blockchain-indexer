@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
 using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
 using Nethereum.Hex.HexTypes;
@@ -20,9 +21,9 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         public static string erc20TransferTableName = $"_erc20_transfer_staging";
         public static string ethTransferTableName = $"_eth_transfer_staging";
         public static string gnosisSafeEthTransferTableName = $"_gnosis_safe_eth_transfer_staging";
-        
-        public static void WriteTransactions(
-            NpgsqlConnection writerConnection,
+
+        public static async Task WriteTransactions(
+            string writerConnectionString,
             IEnumerable<(
                 int TotalTransactionsInBlock,
                 string TxHash,
@@ -50,62 +51,116 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 ));
             }
 
-            BlockWriter.WriteBlocks(writerConnection, blockTableName, blockList);
+            var _writerConnection = await GetDbConnection(writerConnectionString);
+            BlockWriter.WriteBlocks(_writerConnection, blockTableName, blockList);
 
             var details =
                 transactionsWithExtractedDetailsArr.SelectMany(transaction =>
                         transaction.Details.Select(detail => (transaction, detail)))
                     .ToArray();
 
-            StagingTables.WriteTransactionRows(
-                writerConnection,
+            var promises = new List<Task>();
+
+            promises.Add(StagingTables.WriteTransactionRows(
+                _writerConnection,
                 transactionsWithExtractedDetailsArr,
-                transactionTableName);
+                transactionTableName).ContinueWith(_ => _writerConnection.Close()));
 
             var hubTransfers =
                 details.Where(o =>
                     o.transaction.Classification.HasFlag(TransactionClass.CrcHubTransfer) &&
-                    o.detail is CrcHubTransfer);
+                    o.detail is CrcHubTransfer).ToArray();
 
-            StagingTables.WriteHubTransfers(writerConnection, hubTransferTableName, hubTransfers);
+            if (hubTransfers.Length > 0)
+            {
+                var writerConnection = await GetDbConnection(writerConnectionString);
+                promises.Add(StagingTables.WriteHubTransfers(writerConnection, hubTransferTableName, hubTransfers)
+                    .ContinueWith(_ => writerConnection.Close()));
+            }
 
             var organisationSignups =
                 details.Where(o =>
                     o.transaction.Classification.HasFlag(TransactionClass.CrcOrganisationSignup) &&
-                    o.detail is CrcOrganisationSignup);
+                    o.detail is CrcOrganisationSignup).ToArray();
 
-            StagingTables.WriteOrganisationSignups(writerConnection, organisationSignupTableName, organisationSignups);
+            if (organisationSignups.Length > 0)
+            {
+                var writerConnection = await GetDbConnection(writerConnectionString);
+                promises.Add(StagingTables.WriteOrganisationSignups(writerConnection, organisationSignupTableName,
+                    organisationSignups).ContinueWith(_ => writerConnection.Close()));
+            }
 
             var signups =
                 details.Where(o =>
-                    o.transaction.Classification.HasFlag(TransactionClass.CrcSignup) && o.detail is CrcSignup);
+                        o.transaction.Classification.HasFlag(TransactionClass.CrcSignup) && o.detail is CrcSignup)
+                    .ToArray();
 
-            StagingTables.WriteSignups(writerConnection, signupTableName, signups);
+            if (signups.Length > 0)
+            {
+                var writerConnection = await GetDbConnection(writerConnectionString);
+                promises.Add(StagingTables.WriteSignups(writerConnection, signupTableName, signups)
+                    .ContinueWith(_ => writerConnection.Close()));
+            }
 
             var trusts =
                 details.Where(o =>
-                    o.transaction.Classification.HasFlag(TransactionClass.CrcTrust) && o.detail is CrcTrust);
+                        o.transaction.Classification.HasFlag(TransactionClass.CrcTrust) && o.detail is CrcTrust)
+                    .ToArray();
 
-            StagingTables.WriteTrusts(writerConnection, trustTableName, trusts);
+            if (trusts.Length > 0)
+            {
+                var writerConnection = await GetDbConnection(writerConnectionString);
+                promises.Add(StagingTables.WriteTrusts(writerConnection, trustTableName, trusts)
+                    .ContinueWith(_ => writerConnection.Close()));
+            }
 
             var erc20Transfers =
                 details.Where(o =>
-                    o.transaction.Classification.HasFlag(TransactionClass.Erc20Transfer) && o.detail is Erc20Transfer);
+                        o.transaction.Classification.HasFlag(TransactionClass.Erc20Transfer) &&
+                        o.detail is Erc20Transfer)
+                    .ToArray();
 
-            StagingTables.WriteErc20Transfers(writerConnection, erc20TransferTableName, erc20Transfers);
+            if (erc20Transfers.Length > 0)
+            {
+                var writerConnection = await GetDbConnection(writerConnectionString);
+                promises.Add(StagingTables.WriteErc20Transfers(writerConnection, erc20TransferTableName, erc20Transfers)
+                    .ContinueWith(_ => writerConnection.Close()));
+            }
 
             var ethTransfers =
                 details.Where(o =>
-                    o.transaction.Classification.HasFlag(TransactionClass.EoaEthTransfer) && o.detail is EthTransfer);
+                        o.transaction.Classification.HasFlag(TransactionClass.EoaEthTransfer) &&
+                        o.detail is EthTransfer)
+                    .ToArray();
 
-            StagingTables.WriteEthTransfers(writerConnection, ethTransferTableName, ethTransfers);
+            if (ethTransfers.Length > 0)
+            {
+                var writerConnection = await GetDbConnection(writerConnectionString);
+                promises.Add(StagingTables.WriteEthTransfers(writerConnection, ethTransferTableName, ethTransfers)
+                    .ContinueWith(_ => writerConnection.Close()));
+            }
 
             var safeEthTransfers =
                 details.Where(o =>
-                    o.transaction.Classification.HasFlag(TransactionClass.SafeEthTransfer) &&
-                    o.detail is GnosisSafeEthTransfer);
+                        o.transaction.Classification.HasFlag(TransactionClass.SafeEthTransfer) &&
+                        o.detail is GnosisSafeEthTransfer)
+                    .ToArray();
 
-            StagingTables.WriteSafeEthTransfers(writerConnection, gnosisSafeEthTransferTableName, safeEthTransfers);
+            if (safeEthTransfers.Length > 0)
+            {
+                var writerConnection = await GetDbConnection(writerConnectionString);
+                promises.Add(StagingTables.WriteSafeEthTransfers(writerConnection, gnosisSafeEthTransferTableName,
+                    safeEthTransfers).ContinueWith(_ => writerConnection.Close()));
+            }
+
+            await Task.WhenAll(promises);
+        }
+
+        private static async Task<NpgsqlConnection> GetDbConnection(string writerConnectionString)
+        {
+            var writerConnection = new NpgsqlConnection(writerConnectionString);
+            await writerConnection.OpenAsync();
+            return writerConnection;
         }
     }
 }

@@ -55,7 +55,7 @@ namespace CirclesLand.BlockchainIndexer.Sources
             });
         }
 
-        public static async Task<long> CheckForReorgsInLastBlocks(NpgsqlConnection connection, Web3 web3, long? fromBlock = null, long blockCount = 16)
+        public static async Task<long> CheckForReorgsInLastBlocks(NpgsqlConnection connection, Web3 web3, long? fromBlock = null, long blockCount = 18)
         {
             await using var cmd =
                 new NpgsqlCommand(

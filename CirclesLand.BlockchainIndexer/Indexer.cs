@@ -104,10 +104,12 @@ namespace CirclesLand.BlockchainIndexer
                     CleanupAfterReorg();
                     ReorgSource.BlockReorgsSharedState.Clear();
                 }
+                else
+                {
+                    roundContext.Log($" Importing from staging tables ..");
+                    ImportProcedure.ImportFromStaging(roundContext.Connection, Settings.BulkFlushTimeoutInSeconds);
+                }
 
-                roundContext.Log($" Importing from staging tables ..");
-                ImportProcedure.ImportFromStaging(roundContext.Connection, Settings.BulkFlushTimeoutInSeconds);
-                
                 roundContext.Log($"Finding the last persisted block ..");
                 var lastPersistedBlock = roundContext.GetLastValidBlock();
                 LastBlock.WithLabels("at_round_start_imported").Set(lastPersistedBlock);
@@ -143,8 +145,6 @@ namespace CirclesLand.BlockchainIndexer
                     
                     var reorgSource = roundContext.SourceFactory.CreateReorgSource();
                     var combinedSource1 = Source.Combine(reorgSource, source, i => new Merge<HexBigInteger>(i));
-                    var combinedSerialSource = Source.Combine(combinedSource1, GapSource.Create(120000, Settings.ConnectionString), i => new Merge<HexBigInteger>(i));
-                    var combinedBulkSource = Source.Combine(source, GapSource.Create(120000, Settings.ConnectionString, true), i => new Merge<HexBigInteger>(i));
                     
                     flushEveryNthBatch = Mode == IndexerMode.CatchUp 
                         ? Settings.BulkFlushInterval 
@@ -152,8 +152,8 @@ namespace CirclesLand.BlockchainIndexer
                     
                     activeSource = TransactionAndReceiptSource(
                         Mode == IndexerMode.CatchUp
-                            ? combinedBulkSource
-                            : combinedSerialSource, 
+                            ? Source.Combine(source, GapSource.Create(120000, Settings.ConnectionString, true), i => new Merge<HexBigInteger>(i))
+                            : Source.Combine(combinedSource1, GapSource.Create(120000, Settings.ConnectionString), i => new Merge<HexBigInteger>(i)), 
                         roundContext, 
                         flushEveryNthBatch);
                 }
@@ -191,7 +191,7 @@ namespace CirclesLand.BlockchainIndexer
                 {
                     BlocksTotal.WithLabels("known").Inc();
                     LastBlock.WithLabels("from_source").Set(o.ToUlong());
-                    
+
                     if (ReorgSource.BlockReorgsSharedState.Count > 0)
                     {
                         var color = Console.ForegroundColor;
@@ -201,7 +201,7 @@ namespace CirclesLand.BlockchainIndexer
 
                         throw new Exception("A reorg occurred and the round needs to be restarted.");
                     }
-                    
+
                     HealthService.ReportStartImportBlock(o.ToLong());
                     BlockTracker.AddRequested(roundContext.Connection, o.ToLong());
                     return o;
@@ -210,12 +210,13 @@ namespace CirclesLand.BlockchainIndexer
                 .SelectAsync(Settings.MaxParallelBlockDownloads, currentBlockNo =>
                 {
                     BlocksTotal.WithLabels("download_started").Inc();
-                    
+
                     return roundContext.Web3.Eth.Blocks
                         .GetBlockWithTransactionsByNumber
                         .SendRequestAsync(currentBlockNo);
                 })
-                .Buffer(Settings.MaxDownloadedBlockBufferSize, OverflowStrategy.Backpressure)
+                .Buffer(Mode == IndexerMode.CatchUp ? Settings.MaxDownloadedBlockBufferSize : 1,
+                    OverflowStrategy.Backpressure)
                 // Bundle the every transaction in a block with the block timestamp and send it downstream
                 .SelectMany(block =>
                 {
@@ -229,7 +230,10 @@ namespace CirclesLand.BlockchainIndexer
                         BlockTracker.InsertEmptyBlock(roundContext.Connection, block);
                         if (Mode == IndexerMode.Live || Mode == IndexerMode.Polling)
                         {
-                            CompleteBatch(flushEveryNthBatch, roundContext, false, Array.Empty<(int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction, TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details)>());
+                            CompleteBatch(flushEveryNthBatch, roundContext, false,
+                                Array.Empty<(int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp,
+                                    Transaction Transaction, TransactionReceipt? Receipt, TransactionClass
+                                    Classification, IDetail[] Details)>());
                         }
                     }
 
@@ -242,12 +246,13 @@ namespace CirclesLand.BlockchainIndexer
 
                     return transactions;
                 })
-                .Buffer(Settings.MaxDownloadedTransactionsBufferSize, OverflowStrategy.Backpressure)
+                .Buffer(Mode == IndexerMode.CatchUp ? Settings.MaxDownloadedTransactionsBufferSize : 1,
+                    OverflowStrategy.Backpressure)
                 // Add the receipts for every transaction
                 .SelectAsync(Settings.MaxParallelReceiptDownloads, async timestampAndTransaction =>
                 {
                     ReceiptsTotal.WithLabels("download_started").Inc();
-                    
+
                     var receipt = await roundContext.Web3.Eth.Transactions.GetTransactionReceipt
                         .SendRequestAsync(
                             timestampAndTransaction.Transaction.TransactionHash);
@@ -261,7 +266,8 @@ namespace CirclesLand.BlockchainIndexer
                         Receipt: receipt
                     );
                 })
-                .Buffer(Settings.MaxDownloadedReceiptsBufferSize, OverflowStrategy.Backpressure);
+                .Buffer(Mode == IndexerMode.CatchUp ? Settings.MaxDownloadedReceiptsBufferSize : 1,
+                    OverflowStrategy.Backpressure);
         }
 
         private static void CleanupAfterReorg()
@@ -424,9 +430,8 @@ namespace CirclesLand.BlockchainIndexer
                         Details: extractedDetails
                     );
                 })
-                .GroupedWithin(Settings.WriteToStagingBatchSize,
-                    TimeSpan.FromSeconds(Settings.WriteToStagingBatchMaxIntervalInSeconds))
-                .Buffer(Settings.MaxWriteToStagingBatchBufferSize, OverflowStrategy.Backpressure)
+                .Buffer(Mode == IndexerMode.CatchUp ? Settings.MaxWriteToStagingBatchBufferSize : 10, OverflowStrategy.Backpressure)
+                .GroupedWithin(Settings.WriteToStagingBatchSize, TimeSpan.FromMilliseconds(Mode == IndexerMode.CatchUp ? Settings.WriteToStagingBatchMaxIntervalInSeconds * 1000 : 500))
                 .RunForeach(transactionsWithExtractedDetails =>
                 {
                     BatchesTotal.WithLabels("started").Inc();
@@ -434,10 +439,11 @@ namespace CirclesLand.BlockchainIndexer
                     roundContext.Log($" Writing batch to staging tables ..");
 
                     var txArr = transactionsWithExtractedDetails.ToArray();
-
-                    TransactionsWriter.WriteTransactions(
-                        roundContext.Connection,
+                    var p = TransactionsWriter.WriteTransactions(
+                        Settings.ConnectionString,
                         txArr);
+
+                    p.Wait();
                     
                     CompleteBatch(flushEveryNthBatch, roundContext, false, txArr);
                     HealthService.ReportCompleteBatch(txArr.Max(o => o.Transaction.BlockNumber.ToLong()));
@@ -485,7 +491,7 @@ namespace CirclesLand.BlockchainIndexer
                         ? Settings.BulkFlushTimeoutInSeconds
                         : Settings.SerialFlushTimeoutInSeconds);
 
-                roundContext.Log($" Cleaning staging tables ..");
+                roundContext.Log(" Cleaning staging tables ..");
                 writtenTransactions = StagingTables.CleanImported(roundContext.Connection);
                 
                 TransactionsTotal.WithLabels("imported").Inc(writtenTransactions.Length);

@@ -62,11 +62,11 @@ namespace CirclesLand.BlockchainIndexer.Api
         
         private static bool _serverIsRunning = true;
         private static CancellationTokenRegistration _appShutdownHandler;
-        private readonly ILogger<WebsocketService> _logger;
+        private readonly ILogger<TransactionHashBroadcastService> _logger;
 
         private static Timer? _timer;
         
-        public HealthService(IHostApplicationLifetime hostLifetime, ILogger<WebsocketService> logger)
+        public HealthService(IHostApplicationLifetime hostLifetime, ILogger<TransactionHashBroadcastService> logger)
         {
             // gracefully close all websockets during shutdown (only register on first instantiation)
             if (_appShutdownHandler.Token.Equals(CancellationToken.None))

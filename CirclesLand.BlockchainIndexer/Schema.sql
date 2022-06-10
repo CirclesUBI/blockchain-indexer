@@ -1987,34 +1987,72 @@ create index ix_cache_crc_balances_by_safe_and_token_safe_address on cache_crc_b
 create index ix_cache_crc_balances_by_safe_and_token_token on cache_crc_balances_by_safe_and_token (token);
 create index ix_cache_crc_balances_by_safe_and_token_token_owner on cache_crc_balances_by_safe_and_token (token_owner);
 create index ix_cache_crc_balances_by_safe_and_token_last_change_at on cache_crc_balances_by_safe_and_token (last_change_at);
+
+
 create or replace procedure import_from_staging_2()
     language plpgsql
 as
 $$
 declare
     selected_at_ts timestamp;
-    last_reorg_at numeric;
 begin
+
+    -- Cleanup all duplicate blocks (duplicate number, different hash)
+    -- and leave only the newer blocks.
+    drop table if exists disambiguated_blocks;
+    create temp table disambiguated_blocks
+    as
+    select number, max(distinct timestamp) as timestamp
+    from _block_staging
+    group by number
+    having count(distinct timestamp) > 1;
+
+    delete from _crc_hub_transfer_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _crc_organisation_signup_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _crc_signup_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _crc_trust_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _erc20_transfer_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _eth_transfer_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _gnosis_safe_eth_transfer_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _transaction_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _block_staging b
+        using disambiguated_blocks d
+    where b.number = d.number
+      and b.timestamp < d.timestamp;
+
     select now() into selected_at_ts;
-
-    last_reorg_at =
-            (select min(b.number)
-             from block b
-                      join _block_staging bs on b.number = bs.number
-             where b.number = bs.number
-               and b.hash != bs.hash);
-
-    if (last_reorg_at is not null) then
-        delete from crc_hub_transfer_2 where block_number >= last_reorg_at;
-        delete from crc_organisation_signup_2 where block_number >= last_reorg_at;
-        delete from crc_signup_2 where block_number >= last_reorg_at;
-        delete from crc_trust_2 where block_number >= last_reorg_at;
-        delete from erc20_transfer_2 where block_number >= last_reorg_at;
-        delete from eth_transfer_2 where block_number >= last_reorg_at;
-        delete from gnosis_safe_eth_transfer_2 where block_number >= last_reorg_at;
-        delete from transaction_2 where block_number >= last_reorg_at;
-        delete from block where number >= last_reorg_at;
-    end if;
 
     -- Set 'selected_at' of all complete staging blocks
     with complete_staging_blocks as (
