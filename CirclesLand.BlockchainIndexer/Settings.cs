@@ -176,7 +176,7 @@ namespace CirclesLand.BlockchainIndexer
             MaxDownloadedReceiptsBufferSize = TryGetIntEnvVar("MAX_RECEIPT_BUFFER_SIZE", 96 * 25);
             WriteToStagingBatchSize = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_SIZE", 2000);
             WriteToStagingBatchMaxIntervalInSeconds = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_MAX_INTERVAL_IN_SECONDS", 5);
-            MaxWriteToStagingBatchBufferSize = TryGetIntEnvVar("MAX_WRITE_TO_STAGING_BATCH_BUFFER_SIZE", 25);
+            MaxWriteToStagingBatchBufferSize = TryGetIntEnvVar("MAX_WRITE_TO_STAGING_BATCH_BUFFER_SIZE", 2048);
             StartFromBlock = TryGetLongEnvVar("START_FROM_BLOCK", 12529458L);
             HubAddress = TryGetStringEnvVar("HUB_ADDRESS", "0x29b9a7fbb8995b2423a71cc17cf9810798f6c543");
             DelayStartup = TryGetIntEnvVar("DELAY_START", 0);

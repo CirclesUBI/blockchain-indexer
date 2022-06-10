@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Threading.Tasks;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
 using Dapper;
 using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
@@ -51,7 +52,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
 
             return newTransactions.Select(o => (string)o.hash).ToArray();
         }
-        public static int WriteSafeEthTransfers(NpgsqlConnection writerConnection,
+        public static async Task<int> WriteSafeEthTransfers(NpgsqlConnection writerConnection,
             string? safeEthTransferTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
@@ -59,7 +60,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                     )>
                 safeEthTransfers)
         {
-            using var writer = writerConnection.BeginBinaryImport(
+            await using var writer = await writerConnection.BeginBinaryImportAsync(
                 @$"COPY {safeEthTransferTableName} (
                                          hash
                                         ,index
@@ -77,26 +78,26 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 var blockTimestamp = d.transaction.Timestamp.ToLong();
                 var blockTimestampDateTime = DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
 
-                writer.StartRow();
+                await writer.StartRowAsync();
 
-                writer.Write(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
-                writer.Write((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
-                writer.Write(blockTimestampDateTime, NpgsqlDbType.Timestamp);
-                writer.Write((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
-                writer.Write(((GnosisSafeEthTransfer) d.detail).Initiator, NpgsqlDbType.Text);
-                writer.Write(((GnosisSafeEthTransfer) d.detail).From, NpgsqlDbType.Text);
-                writer.Write(((GnosisSafeEthTransfer) d.detail).To, NpgsqlDbType.Text);
-                writer.Write(((GnosisSafeEthTransfer) d.detail).Value, NpgsqlDbType.Text);
+                await writer.WriteAsync(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
+                await writer.WriteAsync((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
+                await writer.WriteAsync(blockTimestampDateTime, NpgsqlDbType.Timestamp);
+                await writer.WriteAsync((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
+                await writer.WriteAsync(((GnosisSafeEthTransfer) d.detail).Initiator, NpgsqlDbType.Text);
+                await writer.WriteAsync(((GnosisSafeEthTransfer) d.detail).From, NpgsqlDbType.Text);
+                await writer.WriteAsync(((GnosisSafeEthTransfer) d.detail).To, NpgsqlDbType.Text);
+                await writer.WriteAsync(((GnosisSafeEthTransfer) d.detail).Value, NpgsqlDbType.Text);
 
                 rowCount++;
             }
 
-            writer.Complete();
+            await writer.CompleteAsync();
 
             return rowCount;
         }
 
-        public static int WriteEthTransfers(NpgsqlConnection writerConnection,
+        public static async Task<int> WriteEthTransfers(NpgsqlConnection writerConnection,
             string ethTransferTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
@@ -104,7 +105,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                     )>
                 ethTransfers)
         {
-            using var writer = writerConnection.BeginBinaryImport(
+            await using var writer = await writerConnection.BeginBinaryImportAsync(
                 @$"COPY {ethTransferTableName} (
                                          hash
                                         ,index
@@ -121,24 +122,24 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 var blockTimestamp = d.transaction.Timestamp.ToLong();
                 var blockTimestampDateTime = DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
 
-                writer.StartRow();
+                await writer.StartRowAsync();
 
-                writer.Write(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
-                writer.Write((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
-                writer.Write(blockTimestampDateTime, NpgsqlDbType.Timestamp);
-                writer.Write((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
-                writer.Write(((EthTransfer) d.detail).From, NpgsqlDbType.Text);
-                writer.Write(((EthTransfer) d.detail).To, NpgsqlDbType.Text);
-                writer.Write(((EthTransfer) d.detail).Value, NpgsqlDbType.Text);
+                await writer.WriteAsync(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
+                await writer.WriteAsync((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
+                await writer.WriteAsync(blockTimestampDateTime, NpgsqlDbType.Timestamp);
+                await writer.WriteAsync((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
+                await writer.WriteAsync(((EthTransfer) d.detail).From, NpgsqlDbType.Text);
+                await writer.WriteAsync(((EthTransfer) d.detail).To, NpgsqlDbType.Text);
+                await writer.WriteAsync(((EthTransfer) d.detail).Value, NpgsqlDbType.Text);
 
                 rowCount++;
             }
 
-            writer.Complete();
+            await writer.CompleteAsync();
             return rowCount;
         }
 
-        public static int WriteTrusts(NpgsqlConnection writerConnection,
+        public static async Task<int> WriteTrusts(NpgsqlConnection writerConnection,
             string trustTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
@@ -146,7 +147,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                     )>
                 trusts)
         {
-            using var writer = writerConnection.BeginBinaryImport(
+            await using var writer = await writerConnection.BeginBinaryImportAsync(
                 @$"COPY {trustTableName} (
                                          hash
                                         ,index
@@ -163,25 +164,25 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 var blockTimestamp = d.transaction.Timestamp.ToLong();
                 var blockTimestampDateTime = DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
 
-                writer.StartRow();
+                await writer.StartRowAsync();
 
-                writer.Write(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
-                writer.Write((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
-                writer.Write(blockTimestampDateTime, NpgsqlDbType.Timestamp);
-                writer.Write((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
-                writer.Write(((CrcTrust) d.detail).Address, NpgsqlDbType.Text);
-                writer.Write(((CrcTrust) d.detail).CanSendTo, NpgsqlDbType.Text);
-                writer.Write((long) ((CrcTrust) d.detail).Limit, NpgsqlDbType.Numeric);
+                await writer.WriteAsync(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
+                await writer.WriteAsync((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
+                await writer.WriteAsync(blockTimestampDateTime, NpgsqlDbType.Timestamp);
+                await writer.WriteAsync((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
+                await writer.WriteAsync(((CrcTrust) d.detail).Address, NpgsqlDbType.Text);
+                await writer.WriteAsync(((CrcTrust) d.detail).CanSendTo, NpgsqlDbType.Text);
+                await writer.WriteAsync((long) ((CrcTrust) d.detail).Limit, NpgsqlDbType.Numeric);
 
                 rowCount++;
             }
 
-            writer.Complete();
+            await writer.CompleteAsync();
             
             return rowCount;
         }
 
-        public static int WriteSignups(NpgsqlConnection writerConnection,
+        public static async Task<int> WriteSignups(NpgsqlConnection writerConnection,
             string signupsTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
@@ -189,7 +190,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                     )>
                 signups)
         {
-            using var writer = writerConnection.BeginBinaryImport(
+            await using var writer = await writerConnection.BeginBinaryImportAsync(
                 @$"COPY {signupsTableName} (
                                          hash
                                         ,index
@@ -206,25 +207,25 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 var blockTimestamp = d.transaction.Timestamp.ToLong();
                 var blockTimestampDateTime = DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
 
-                writer.StartRow();
+                await writer.StartRowAsync();
 
-                writer.Write(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
-                writer.Write((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
-                writer.Write(blockTimestampDateTime, NpgsqlDbType.Timestamp);
-                writer.Write((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
-                writer.Write(((CrcSignup) d.detail).User, NpgsqlDbType.Text);
-                writer.Write(((CrcSignup) d.detail).Token, NpgsqlDbType.Text);
-                writer.Write(((CrcSignup) d.detail).Owners, NpgsqlDbType.Array | NpgsqlDbType.Text);
+                await writer.WriteAsync(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
+                await writer.WriteAsync((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
+                await writer.WriteAsync(blockTimestampDateTime, NpgsqlDbType.Timestamp);
+                await writer.WriteAsync((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
+                await writer.WriteAsync(((CrcSignup) d.detail).User, NpgsqlDbType.Text);
+                await writer.WriteAsync(((CrcSignup) d.detail).Token, NpgsqlDbType.Text);
+                await writer.WriteAsync(((CrcSignup) d.detail).Owners, NpgsqlDbType.Array | NpgsqlDbType.Text);
 
                 rowCount++;
             }
 
-            writer.Complete();
+            await writer.CompleteAsync();
             
             return rowCount;
         }
 
-        public static int WriteOrganisationSignups(NpgsqlConnection writerConnection,
+        public static async Task<int> WriteOrganisationSignups(NpgsqlConnection writerConnection,
             string organisationSignupsTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
@@ -232,7 +233,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                     )>
                 organisationSignups)
         {
-            using var writer = writerConnection.BeginBinaryImport(
+            await using var writer = await writerConnection.BeginBinaryImportAsync(
                 @$"COPY {organisationSignupsTableName} (
                                          hash
                                         ,index
@@ -248,24 +249,24 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 var blockTimestamp = d.transaction.Timestamp.ToLong();
                 var blockTimestampDateTime = DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
 
-                writer.StartRow();
+                await writer.StartRowAsync();
 
-                writer.Write(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
-                writer.Write((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
-                writer.Write(blockTimestampDateTime, NpgsqlDbType.Timestamp);
-                writer.Write((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
-                writer.Write(((CrcOrganisationSignup) d.detail).Organization, NpgsqlDbType.Text);
-                writer.Write(((CrcOrganisationSignup) d.detail).Owners, NpgsqlDbType.Array | NpgsqlDbType.Text);
+                await writer.WriteAsync(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
+                await writer.WriteAsync((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
+                await writer.WriteAsync(blockTimestampDateTime, NpgsqlDbType.Timestamp);
+                await writer.WriteAsync((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
+                await writer.WriteAsync(((CrcOrganisationSignup) d.detail).Organization, NpgsqlDbType.Text);
+                await writer.WriteAsync(((CrcOrganisationSignup) d.detail).Owners, NpgsqlDbType.Array | NpgsqlDbType.Text);
 
                 rowCount++;
             }
 
-            writer.Complete();
+            await writer.CompleteAsync();
 
             return rowCount;
         }
 
-        public static int WriteHubTransfers(NpgsqlConnection writerConnection,
+        public static async Task<int> WriteHubTransfers(NpgsqlConnection writerConnection,
             string hubTransfersTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
@@ -273,7 +274,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                     )>
                 hubTransfers)
         {
-            using var writer = writerConnection.BeginBinaryImport(
+            await using var writer = await writerConnection.BeginBinaryImportAsync(
                 @$"COPY {hubTransfersTableName} (
                                          hash
                                         ,index
@@ -290,32 +291,32 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 var blockTimestamp = d.transaction.Timestamp.ToLong();
                 var blockTimestampDateTime = DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
 
-                writer.StartRow();
+                await writer.StartRowAsync();
 
-                writer.Write(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
-                writer.Write((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
-                writer.Write(blockTimestampDateTime, NpgsqlDbType.Timestamp);
-                writer.Write((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
-                writer.Write(((CrcHubTransfer) d.detail).From, NpgsqlDbType.Text);
-                writer.Write(((CrcHubTransfer) d.detail).To, NpgsqlDbType.Text);
-                writer.Write(((CrcHubTransfer) d.detail).Value, NpgsqlDbType.Text);
+                await writer.WriteAsync(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
+                await writer.WriteAsync((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
+                await writer.WriteAsync(blockTimestampDateTime, NpgsqlDbType.Timestamp);
+                await writer.WriteAsync((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
+                await writer.WriteAsync(((CrcHubTransfer) d.detail).From, NpgsqlDbType.Text);
+                await writer.WriteAsync(((CrcHubTransfer) d.detail).To, NpgsqlDbType.Text);
+                await writer.WriteAsync(((CrcHubTransfer) d.detail).Value, NpgsqlDbType.Text);
 
                 rowCount++;
             }
 
-            writer.Complete();
+            await writer.CompleteAsync();
 
             return rowCount;
         }
 
-        public static int WriteErc20Transfers(NpgsqlConnection writerConnection, string? erc20TransferTableName,
+        public static async Task<int> WriteErc20Transfers(NpgsqlConnection writerConnection, string? erc20TransferTableName,
             IEnumerable<((int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details) transaction, IDetail
                     detail
                     )>
                 erc20Transfers)
         {
-            using var writer = writerConnection.BeginBinaryImport(
+            await using var writer = await writerConnection.BeginBinaryImportAsync(
                 @$"COPY {erc20TransferTableName} (
                                          hash
                                         ,index
@@ -333,32 +334,32 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 var blockTimestamp = d.transaction.Timestamp.ToLong();
                 var blockTimestampDateTime = DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
 
-                writer.StartRow();
+                await writer.StartRowAsync();
 
-                writer.Write(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
-                writer.Write((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
-                writer.Write(blockTimestampDateTime, NpgsqlDbType.Timestamp);
-                writer.Write((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
-                writer.Write(((Erc20Transfer) d.detail).From, NpgsqlDbType.Text);
-                writer.Write(((Erc20Transfer) d.detail).To, NpgsqlDbType.Text);
-                writer.Write(((Erc20Transfer) d.detail).Token, NpgsqlDbType.Text);
-                writer.Write(((Erc20Transfer) d.detail).Value, NpgsqlDbType.Text);
+                await writer.WriteAsync(d.transaction.Transaction.TransactionHash, NpgsqlDbType.Text);
+                await writer.WriteAsync((int) d.transaction.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
+                await writer.WriteAsync(blockTimestampDateTime, NpgsqlDbType.Timestamp);
+                await writer.WriteAsync((long) d.transaction.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
+                await writer.WriteAsync(((Erc20Transfer) d.detail).From, NpgsqlDbType.Text);
+                await writer.WriteAsync(((Erc20Transfer) d.detail).To, NpgsqlDbType.Text);
+                await writer.WriteAsync(((Erc20Transfer) d.detail).Token, NpgsqlDbType.Text);
+                await writer.WriteAsync(((Erc20Transfer) d.detail).Value, NpgsqlDbType.Text);
 
                 rowCount++;
             }
 
-            writer.Complete();
+            await writer.CompleteAsync();
 
             return rowCount;
         }
 
-        public static int WriteTransactionRows(NpgsqlConnection writerConnection,
+        public static async Task<int> WriteTransactionRows(NpgsqlConnection writerConnection,
             IEnumerable<(int TotalTransactionsInBlock, string TxHash, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt? Receipt, TransactionClass Classification, IDetail[] Details)>
                 transactionsWithExtractedDetails,
             string transactionTableName)
         {
-            using var writer = writerConnection.BeginBinaryImport(
+            await using var writer = await writerConnection.BeginBinaryImportAsync(
                 @$"COPY {transactionTableName} (
                                          block_number
                                         ,""from""
@@ -382,24 +383,24 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 var classificationArray = t.Classification.ToString()
                     .Split(",", StringSplitOptions.TrimEntries);
 
-                writer.StartRow();
+                await writer.StartRowAsync();
 
-                writer.Write((long) t.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
-                writer.Write(t.Transaction.From, NpgsqlDbType.Text);
-                writer.Write(t.Transaction.To, NpgsqlDbType.Text);
-                writer.Write(t.Transaction.TransactionHash, NpgsqlDbType.Text);
-                writer.Write((int) t.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
-                writer.Write(blockTimestampDateTime, NpgsqlDbType.Timestamp);
-                writer.Write(t.Transaction.Value.Value.ToString(), NpgsqlDbType.Text);
-                writer.Write(t.Transaction.Input, NpgsqlDbType.Text);
-                writer.Write(t.Transaction.Nonce.ToString(), NpgsqlDbType.Text);
-                writer.Write(t.Transaction.Type?.ToString() ?? "0", NpgsqlDbType.Text);
-                writer.Write(classificationArray, NpgsqlDbType.Array | NpgsqlDbType.Text);
+                await writer.WriteAsync((long) t.Transaction.BlockNumber.Value, NpgsqlDbType.Bigint);
+                await writer.WriteAsync(t.Transaction.From, NpgsqlDbType.Text);
+                await writer.WriteAsync(t.Transaction.To, NpgsqlDbType.Text);
+                await writer.WriteAsync(t.Transaction.TransactionHash, NpgsqlDbType.Text);
+                await writer.WriteAsync((int) t.Transaction.TransactionIndex.Value, NpgsqlDbType.Integer);
+                await writer.WriteAsync(blockTimestampDateTime, NpgsqlDbType.Timestamp);
+                await writer.WriteAsync(t.Transaction.Value.Value.ToString(), NpgsqlDbType.Text);
+                await writer.WriteAsync(t.Transaction.Input, NpgsqlDbType.Text);
+                await writer.WriteAsync(t.Transaction.Nonce.ToString(), NpgsqlDbType.Text);
+                await writer.WriteAsync(t.Transaction.Type?.ToString() ?? "0", NpgsqlDbType.Text);
+                await writer.WriteAsync(classificationArray, NpgsqlDbType.Array | NpgsqlDbType.Text);
 
                 rowCount++;
             }
 
-            writer.Complete();
+            await writer.CompleteAsync();
 
             return rowCount;
         }

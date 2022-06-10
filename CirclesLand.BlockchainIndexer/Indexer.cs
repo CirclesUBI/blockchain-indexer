@@ -439,10 +439,11 @@ namespace CirclesLand.BlockchainIndexer
                     roundContext.Log($" Writing batch to staging tables ..");
 
                     var txArr = transactionsWithExtractedDetails.ToArray();
-
-                    TransactionsWriter.WriteTransactions(
-                        roundContext.Connection,
+                    var p = TransactionsWriter.WriteTransactions(
+                        Settings.ConnectionString,
                         txArr);
+
+                    p.Wait();
                     
                     CompleteBatch(flushEveryNthBatch, roundContext, false, txArr);
                     HealthService.ReportCompleteBatch(txArr.Max(o => o.Transaction.BlockNumber.ToLong()));
