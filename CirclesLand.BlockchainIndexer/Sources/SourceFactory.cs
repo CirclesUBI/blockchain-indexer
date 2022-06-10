@@ -25,7 +25,7 @@ namespace CirclesLand.BlockchainIndexer.Sources
 
         public Source<HexBigInteger,NotUsed> CreateReorgSource()
         {
-            return ReorgSource.Create(45000, Settings.ConnectionString, Settings.RpcEndpointUrl);
+            return ReorgSource.Create(60000, Settings.ConnectionString, Settings.RpcEndpointUrl);
         }
     }
 }

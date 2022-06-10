@@ -78,7 +78,7 @@ namespace CirclesLand.BlockchainIndexer
             OnBatchSuccess();
             
             Console.WriteLine($"Imported {writtenTransactions.Length} transactions");
-            WebsocketService.BroadcastMessage(JsonConvert.SerializeObject(writtenTransactions));
+            TransactionHashBroadcastService.BroadcastMessage(JsonConvert.SerializeObject(writtenTransactions));
         }
 
         public void Dispose()
