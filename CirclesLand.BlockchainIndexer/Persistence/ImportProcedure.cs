@@ -49,9 +49,10 @@ namespace CirclesLand.BlockchainIndexer.Persistence
         private static void ReportRowCounts(NpgsqlConnection connection, string ofTable)
         {
             var rowCountCmd = new NpgsqlCommand(@"
-                    SELECT (reltuples / relpages * (pg_relation_size(oid) / 8192))::bigint
-                    FROM   pg_class
-                    WHERE  oid = $1::regclass;", connection);
+                SELECT (reltuples / (case when relpages = 0 then 1 else relpages end) * (pg_relation_size(oid) / 8192))::bigint
+                FROM   pg_class
+                WHERE  oid = $1::regclass;"
+                , connection);
 
             rowCountCmd.Parameters.AddWithValue(ofTable);
             var scalarResult = rowCountCmd.ExecuteScalar();
