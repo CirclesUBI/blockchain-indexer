@@ -468,13 +468,18 @@ namespace CirclesLand.BlockchainIndexer
             }
             else
             {
-                // roundContext.Log($"Found {delta} blocks to catch up. Using the 'Polling' source.");
-                // Mode = IndexerMode.Polling;
-                // source = roundContext.SourceFactory.CreatePollingSource();
-
-                roundContext.Log($"Found {delta} blocks to catch up. Using the 'Live' source.");
-                Mode = IndexerMode.Live;
-                source = await roundContext.SourceFactory.CreateLiveSource(lastPersistedBlock);
+                if (string.IsNullOrWhiteSpace(Settings.RpcWsEndpointUrl) || Settings.RpcWsEndpointUrl == "null")
+                {
+                    roundContext.Log($"Found {delta} blocks to catch up. Using the 'Polling' source.");
+                    Mode = IndexerMode.Polling;
+                    source = roundContext.SourceFactory.CreatePollingSource();
+                }
+                else
+                {
+                    roundContext.Log($"Found {delta} blocks to catch up. Using the 'Live' source.");
+                    Mode = IndexerMode.Live;
+                    source = await roundContext.SourceFactory.CreateLiveSource(lastPersistedBlock);
+                }
             }
 
             return source;
