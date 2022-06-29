@@ -110,7 +110,9 @@ namespace CirclesLand.BlockchainIndexer
                 && Statistics.TotalErrorCount < RoundNo
                 && delta < Settings.UseBulkSourceThreshold;
             
-            if (!catchUpMostLikelyCompleted || String.IsNullOrEmpty(Settings.RpcWsEndpointUrl))
+            if (!catchUpMostLikelyCompleted 
+                || String.IsNullOrEmpty(Settings.RpcWsEndpointUrl) 
+                || Settings.RpcWsEndpointUrl == "null")
             {
                 Logger.Log("Using the http connection for the next round.");
                 Web3 = new Web3(Settings.RpcEndpointUrl); 
