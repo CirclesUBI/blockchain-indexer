@@ -2279,3 +2279,15 @@ end;
 $$;
 
 commit;
+
+create or replace view crc_alive_accounts
+as
+select distinct safe_address as to
+from cache_crc_balances_by_safe_and_token
+where last_change_at > now() - '3 months'::interval
+
+create or replace view crc_dead_accounts
+as
+select distinct safe_address as to
+from cache_crc_balances_by_safe_and_token
+where last_change_at < now() - '3 months'::interval
