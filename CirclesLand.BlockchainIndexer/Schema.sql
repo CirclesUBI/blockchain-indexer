@@ -2284,10 +2284,83 @@ create or replace view crc_alive_accounts
 as
 select distinct safe_address as to
 from cache_crc_balances_by_safe_and_token
-where last_change_at > now() - '3 months'::interval
+where last_change_at > now() - '3 months'::interval;
 
 create or replace view crc_dead_accounts
 as
 select distinct safe_address as to
 from cache_crc_balances_by_safe_and_token
-where last_change_at < now() - '3 months'::interval
+where last_change_at < now() - '3 months'::interval;
+
+create or replace function max_transferable_amount("user" text, can_send_to text, token text, "limit" numeric) returns numeric
+    language plpgsql
+as
+$$
+declare
+token_owner text;
+    sender_balance numeric;
+    receiver_balance numeric;
+    receiver_balance_scaled numeric;
+    receiver_is_orga bool;
+    owner_balance numeric;
+max numeric;
+begin
+select crc_signup_2."user"
+from crc_signup_2
+where crc_signup_2.token = max_transferable_amount.token
+    into token_owner;
+
+select balance
+from crc_balances_by_safe_and_token_2
+where crc_balances_by_safe_and_token_2.token = max_transferable_amount.token
+  and safe_address = max_transferable_amount."user"
+    into sender_balance;
+
+-- if "to" is the owner of the token then it accepts all of from's tokens
+if (can_send_to = token_owner)
+    then
+        return sender_balance;
+end if;
+
+select crc_all_signups.token is null
+from crc_all_signups
+where crc_all_signups."user" = can_send_to
+    into receiver_is_orga;
+
+-- if "to" is an organization then it accepts all of from's tokens
+if (receiver_is_orga)
+    then
+        return sender_balance;
+end if;
+
+select balance
+from crc_balances_by_safe_and_token_2
+where crc_balances_by_safe_and_token_2.token = max_transferable_amount.token
+  and safe_address = token_owner
+    into owner_balance;
+
+-- max transferable amount:
+max = owner_balance * "limit" / 100;
+
+select balance
+from crc_balances_by_safe_and_token_2
+where crc_balances_by_safe_and_token_2.token = max_transferable_amount.token
+  and safe_address = can_send_to
+    into receiver_balance;
+
+if (receiver_balance > 0 and max < receiver_balance)
+    then
+        return 0;
+end if;
+
+    receiver_balance_scaled = (receiver_balance * (100 - "limit")) / 100;
+max = max - receiver_balance_scaled;
+
+    if (max < sender_balance)
+    then
+        return max;
+else
+        return sender_balance;
+end if;
+end;
+$$;
