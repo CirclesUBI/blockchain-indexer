@@ -2365,6 +2365,15 @@ end if;
 end;
 $$;
 
+create index ix_cache_crc_current_trust_user_token
+    on cache_crc_current_trust (user_token);
+
+create index ix_cache_crc_current_trust_limit
+    on cache_crc_current_trust ("limit");
+
+create unique index ux_crc_signup_2_token
+    on crc_signup_2 (token) include ("user");
+
 create view crc_capacity_graph
 as
 with accepted_tokens as (
