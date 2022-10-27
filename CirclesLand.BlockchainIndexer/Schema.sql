@@ -2364,3 +2364,74 @@ else
 end if;
 end;
 $$;
+
+create view crc_capacity_graph
+as
+with accepted_tokens as (
+    select can_send_to       as potential_token_receiver
+         , user_token        as accepted_token
+         , cas.token         as potential_token_receivers_own_token
+         , cas.token is null as potential_token_receiver_is_orga
+         , "limit"           as limit
+    from cache_crc_current_trust
+             join crc_all_signups cas on cache_crc_current_trust."can_send_to" = cas."user"
+    where "limit" > 0
+    -- and "can_send_to" = '0xde374ece6fa50e781e81aac78e811b33d16912c7' -- person
+    --and "can_send_to" = '0x0acac72e2195695b39721387e5dc0ce70a33c09c' -- orga
+), total_holdings as (
+    select balances.safe_address                                                as token_holder
+         , balances.balance                                                     as balance
+         , accepted_tokens.accepted_token                                       as token
+         , accepted_tokens.potential_token_receiver                             as can_send_to
+         , accepted_tokens.potential_token_receiver_is_orga                     as can_send_to_is_orga
+         , accepted_tokens.potential_token_receivers_own_token = balances.token as is_receivers_own_token
+         , accepted_tokens.limit
+    from accepted_tokens
+             join cache_crc_balances_by_safe_and_token balances on accepted_tokens.accepted_token = balances.token
+    where balances.safe_address != '0x0000000000000000000000000000000000000000' --ignore black hole addresses
+        and balances.safe_address != '0x0000000000000000000000000000000000000001'
+        and balances.balance > 0
+        and balances.safe_address != accepted_tokens.potential_token_receiver     -- users can't send to themselves
+        ), with_token_owners as (
+        select h.*
+        , s."user" as token_owner
+        from total_holdings h
+        left join crc_all_signups s on s.token = h.token
+        ), with_token_owner_balance as (
+        select h.*
+        , coalesce(b.balance, 0) as token_owners_own_balance
+        from with_token_owners h
+        left join cache_crc_balances_by_safe_and_token b on h.token_owner = b.safe_address
+        and h.token = b.token
+        ), with_max_transferable_amount as (
+        select *
+        , token_owners_own_balance * "limit" / 100 as max_transferable_amount
+        from with_token_owner_balance
+        ), with_receiver_balance as (
+        select h.*
+        , coalesce(b.balance, 0) as receiver_token_balance
+        , (coalesce(b.balance, 0) * (100 - "limit")) / 100 as receiver_token_balance_scaled
+        from with_max_transferable_amount h
+        left join cache_crc_balances_by_safe_and_token b on h.can_send_to = b.safe_address
+        and h.token = b.token
+        ), max_capacity as (
+        select *
+        , max_transferable_amount - receiver_token_balance_scaled as max_capacity
+        from with_receiver_balance
+        ), final as (
+        select *
+        , receiver_token_balance > 0 and max_transferable_amount < receiver_token_balance as zero
+        , case when max_capacity < balance then max_capacity else balance end as actual_capacity
+        from max_capacity
+        )
+select token_holder
+     , token
+     , balance
+     , can_send_to
+     , can_send_to_is_orga
+     , case when is_receivers_own_token or can_send_to_is_orga
+                then balance
+            else (
+                case when zero then 0 else actual_capacity end
+                ) end as capacity
+from final;
