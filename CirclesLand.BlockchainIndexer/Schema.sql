@@ -2444,3 +2444,319 @@ select token_holder
                 case when zero then 0 else actual_capacity end
                 ) end as capacity
 from final;
+
+create table cache_all_addresses (
+                                     id serial primary key,
+                                     type text,
+                                     address text unique
+);
+
+insert into cache_all_addresses (type, address)
+select 'token', token
+from crc_signup_2
+union all
+select 'safe', "user"
+from crc_signup_2
+union all
+select 'safe', organisation
+from crc_organisation_signup_2;
+
+create or replace procedure import_from_staging_2()
+    language plpgsql
+as
+$$
+declare
+selected_at_ts timestamp;
+begin
+
+    -- Cleanup all duplicate blocks (duplicate number, different hash)
+    -- and leave only the newer blocks.
+drop table if exists disambiguated_blocks;
+create temp table disambiguated_blocks
+    as
+select number, max(distinct timestamp) as timestamp
+from _block_staging
+group by number
+having count(distinct timestamp) > 1;
+
+delete from _crc_hub_transfer_staging b
+    using disambiguated_blocks d
+where b.block_number = d.number
+  and b.timestamp < d.timestamp;
+
+delete from _crc_organisation_signup_staging b
+    using disambiguated_blocks d
+where b.block_number = d.number
+  and b.timestamp < d.timestamp;
+
+delete from _crc_signup_staging b
+    using disambiguated_blocks d
+where b.block_number = d.number
+  and b.timestamp < d.timestamp;
+
+delete from _crc_trust_staging b
+    using disambiguated_blocks d
+where b.block_number = d.number
+  and b.timestamp < d.timestamp;
+
+delete from _erc20_transfer_staging b
+    using disambiguated_blocks d
+where b.block_number = d.number
+  and b.timestamp < d.timestamp;
+
+delete from _eth_transfer_staging b
+    using disambiguated_blocks d
+where b.block_number = d.number
+  and b.timestamp < d.timestamp;
+
+delete from _gnosis_safe_eth_transfer_staging b
+    using disambiguated_blocks d
+where b.block_number = d.number
+  and b.timestamp < d.timestamp;
+
+delete from _transaction_staging b
+    using disambiguated_blocks d
+where b.block_number = d.number
+  and b.timestamp < d.timestamp;
+
+delete from _block_staging b
+    using disambiguated_blocks d
+where b.number = d.number
+  and b.timestamp < d.timestamp;
+
+select now() into selected_at_ts;
+
+-- Set 'selected_at' of all complete staging blocks
+with complete_staging_blocks as (
+    select bs.number, bs.total_transaction_count, count(distinct ts.hash)
+    from _block_staging bs
+             left join _transaction_staging ts on bs.number = ts.block_number
+    group by bs.number, bs.total_transaction_count
+    having count(distinct ts.hash) = bs.total_transaction_count
+)
+update _block_staging bs
+set selected_at = selected_at_ts
+    from complete_staging_blocks csb
+where bs.selected_at is null
+  and bs.already_available is null
+  and bs.imported_at is null
+  and bs.number = csb.number;
+
+-- Set 'already_available' and remove 'selected_at' on all selected entries which are already
+-- completely imported.
+with completed_blocks as (
+    select b.number, b.total_transaction_count, count(distinct t.hash)
+    from _block_staging bs
+             join block b on bs.number = b.number
+             left join transaction_2 t on b.number = t.block_number
+    group by b.number, b.total_transaction_count
+    having count(distinct t.hash) = b.total_transaction_count
+)
+update _block_staging bs
+set already_available = true,
+    selected_at = null
+    from completed_blocks
+where bs.number = completed_blocks.number;
+
+-- insert all selected blocks
+insert into block
+select distinct sb.number, sb.hash, sb.timestamp, sb.total_transaction_count, 0 as indexed_transaction_count
+from _block_staging sb
+where sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+-- insert all transactions of all selected blocks
+insert into transaction_2
+select distinct ts2.block_number
+              , ts2."from"
+              , ts2."to"
+              , ts2.hash
+              , ts2.index
+              , ts2.timestamp
+              , ts2.value::numeric
+                  , ts2.input
+              , ts2.nonce
+              , ts2.type
+              , ts2.classification
+from _block_staging sb
+         join _transaction_staging ts2 on sb.number= ts2.block_number
+where sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+insert into crc_hub_transfer_2
+select distinct ts2.hash
+              , ts2.index
+              , ts2.timestamp
+              , ts2.block_number
+              , ts2."from"
+              , ts2."to"
+              , ts2.value::numeric
+from _block_staging sb
+         join _crc_hub_transfer_staging ts2 on sb.number= ts2.block_number
+    and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+insert into crc_organisation_signup_2
+select distinct ts2.hash
+              , ts2.index
+              , ts2.timestamp
+              , ts2.block_number
+              , ts2.organisation
+              , ts2.owners
+from _block_staging sb
+         join _crc_organisation_signup_staging ts2 on sb.number = ts2.block_number
+    and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+insert into crc_signup_2
+select distinct ts2.hash
+              , ts2.index
+              , ts2.timestamp
+              , ts2.block_number
+              , ts2."user"
+              , ts2.token
+              , ts2.owners
+from _block_staging sb
+         join _crc_signup_staging ts2 on sb.number = ts2.block_number
+    and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+insert into cache_all_addresses  (type, address)
+select 'token', token
+from _crc_signup_staging
+        union all
+select 'safe', "user"
+from _crc_signup_staging
+        union all
+select 'safe', organisation
+from _crc_organisation_signup_staging
+        on conflict do nothing;
+
+insert into crc_trust_2
+select distinct ts2.hash
+              , ts2.index
+              , ts2.timestamp
+              , ts2.block_number
+              , ts2.address
+              , ts2.can_send_to
+              , ts2."limit"
+from _block_staging sb
+         join _crc_trust_staging ts2 on sb.number = ts2.block_number
+    and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+insert into erc20_transfer_2
+select distinct ts2.hash
+              , ts2.index
+              , ts2.timestamp
+              , ts2.block_number
+              , ts2."from"
+              , ts2."to"
+              , ts2.token
+              , ts2.value::numeric
+from _block_staging sb
+         join _erc20_transfer_staging ts2 on sb.number = ts2.block_number
+    and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+insert into eth_transfer_2
+select distinct ts2.hash
+              , ts2.index
+              , ts2.timestamp
+              , ts2.block_number
+              , ts2."from"
+              , ts2."to"
+              , ts2.value::numeric
+from _block_staging sb
+         join _eth_transfer_staging ts2 on sb.number = ts2.block_number
+    and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+insert into gnosis_safe_eth_transfer_2
+select distinct ts2.hash
+              , ts2.index
+              , ts2.timestamp
+              , ts2.block_number
+              , ts2.initiator
+              , ts2."from"
+              , ts2."to"
+              , ts2.value::numeric
+from _block_staging sb
+         join _gnosis_safe_eth_transfer_staging ts2 on sb.number = ts2.block_number
+    and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+update _block_staging
+    set
+    imported_at = now()
+    , selected_at = null
+where selected_at = selected_at_ts
+   or already_available is not null;
+
+--
+-- Take care of possibly outdated cached crc balances
+--
+create temporary table stale_cached_balances as
+select "from" as safe_address
+from _erc20_transfer_staging
+             join crc_all_signups cas on _erc20_transfer_staging."from" = cas."user"
+union
+select "to" as safe_address
+from _erc20_transfer_staging
+             join crc_all_signups cas on _erc20_transfer_staging."to" = cas."user"
+union
+select "from" as safe_address
+from _crc_hub_transfer_staging
+             join crc_all_signups cas on _crc_hub_transfer_staging."from" = cas."user"
+union
+select "to" as safe_address
+from _crc_hub_transfer_staging
+             join crc_all_signups cas on _crc_hub_transfer_staging."to" = cas."user";
+
+create unique index t_ux_stale_cached_balances_safe_address on stale_cached_balances(safe_address);
+
+delete from cache_crc_balances_by_safe_and_token c
+    using stale_cached_balances s
+where s.safe_address = c.safe_address;
+
+insert into cache_crc_balances_by_safe_and_token
+select b.safe_address
+     , token
+     , token_owner
+     , balance
+     , last_change_at
+from crc_balances_by_safe_and_token_2 b
+where b.safe_address = ANY((select array_agg(safe_address) from stale_cached_balances)::text[]);
+
+drop table stale_cached_balances;
+
+create temporary table stale_cached_trust_relations as
+select address safe_address
+from _crc_trust_staging
+    union
+select can_send_to safe_address
+from _crc_trust_staging;
+
+create unique index t_ux_stale_cached_trust_relations_safe_address on stale_cached_trust_relations(safe_address);
+
+delete from cache_crc_current_trust c
+    using stale_cached_trust_relations s
+where s.safe_address = c."user"
+   or  s.safe_address = c."can_send_to";
+
+insert into cache_crc_current_trust
+select b."user"
+     , b.user_token
+     , b.can_send_to
+     , b.can_send_to_token
+     , b."limit"
+     , b.history_count
+     , b.last_change
+from crc_current_trust_2 b
+where b."user" = ANY((select array_agg(safe_address) from stale_cached_trust_relations)::text[])
+   or b."can_send_to" = ANY((select array_agg(safe_address) from stale_cached_trust_relations)::text[]);
+
+drop table stale_cached_trust_relations;
+
+end;
+$$;
