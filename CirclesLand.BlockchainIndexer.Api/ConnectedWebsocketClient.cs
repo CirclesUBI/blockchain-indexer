@@ -4,7 +4,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
-using Prometheus;
 
 namespace CirclesLand.BlockchainIndexer.Api
 {

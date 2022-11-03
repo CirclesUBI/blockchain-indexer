@@ -19,6 +19,7 @@ using CirclesLand.BlockchainIndexer.Util;
 using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
 using Nethereum.Hex.HexTypes;
 using Nethereum.RPC.Eth.DTOs;
+using Newtonsoft.Json;
 using Npgsql;
 using Prometheus;
 
@@ -194,6 +195,8 @@ namespace CirclesLand.BlockchainIndexer
 
                     if (ReorgSource.BlockReorgsSharedState.Count > 0)
                     {
+                        TransactionHashBroadcastService.BroadcastMessage("[\"0xDEADBEEF00000000000000000000000000000000000000000000000000000000\"]");
+                        
                         var color = Console.ForegroundColor;
                         Console.ForegroundColor = ConsoleColor.Magenta;
                         Console.WriteLine($"Restarting ..");
