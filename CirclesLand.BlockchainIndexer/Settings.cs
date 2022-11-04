@@ -180,11 +180,14 @@ namespace CirclesLand.BlockchainIndexer
             WriteToStagingBatchMaxIntervalInSeconds = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_MAX_INTERVAL_IN_SECONDS", 5);
             MaxWriteToStagingBatchBufferSize = TryGetIntEnvVar("MAX_WRITE_TO_STAGING_BATCH_BUFFER_SIZE", 2048);
             StartFromBlock = TryGetLongEnvVar("START_FROM_BLOCK", 12529458L);
-            HubAddress = TryGetStringEnvVar("HUB_ADDRESS", "0x29b9a7fBb8995b2423a71cC17cf9810798F6C543");
+            HubAddress = TryGetStringEnvVar("HUB_ADDRESS", "0x29b9a7fbb8995b2423a71cc17cf9810798f6c543").ToLowerInvariant();
             DelayStartup = TryGetIntEnvVar("DELAY_START", 0);
-            
-            
-            
+
+            if (string.IsNullOrWhiteSpace(HubAddress))
+            {
+                throw new Exception("Cannot start without a valid configured HUB_ADDRESS.");
+            }
+
             MultiSendContractAddress = TryGetStringEnvVar("MULTI_SEND_ADDRESS", "");
             
 
