@@ -19,7 +19,6 @@ using CirclesLand.BlockchainIndexer.Util;
 using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
 using Nethereum.Hex.HexTypes;
 using Nethereum.RPC.Eth.DTOs;
-using Newtonsoft.Json;
 using Npgsql;
 using Prometheus;
 
@@ -35,6 +34,8 @@ namespace CirclesLand.BlockchainIndexer
 
     public class Indexer
     {
+        public const string DeadBeefTxHashJsonArr = "[\"0xDEADBEEF00000000000000000000000000000000000000000000000000000000\"]";
+        
         public IndexerMode Mode { get; private set; } = IndexerMode.NotRunning;
 
         private Source<(int TotalTransactionsInBlock, HexBigInteger Timestamp, Transaction Transaction,
@@ -195,7 +196,7 @@ namespace CirclesLand.BlockchainIndexer
 
                     if (ReorgSource.BlockReorgsSharedState.Count > 0)
                     {
-                        TransactionHashBroadcastService.BroadcastMessage("[\"0xDEADBEEF00000000000000000000000000000000000000000000000000000000\"]");
+                        TransactionHashBroadcastService.BroadcastMessage(DeadBeefTxHashJsonArr);
                         
                         var color = Console.ForegroundColor;
                         Console.ForegroundColor = ConsoleColor.Magenta;
