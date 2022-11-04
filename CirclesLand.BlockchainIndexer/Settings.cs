@@ -42,6 +42,8 @@ namespace CirclesLand.BlockchainIndexer
         
         
         public static readonly string HubAddress;
+        public static readonly string MultiSendContractAddress;
+        
         public static readonly string AddressEmptyBytesPrefix = "0x000000000000000000000000";
 
         public static readonly string CrcHubTransferEventTopic =
@@ -178,8 +180,12 @@ namespace CirclesLand.BlockchainIndexer
             WriteToStagingBatchMaxIntervalInSeconds = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_MAX_INTERVAL_IN_SECONDS", 5);
             MaxWriteToStagingBatchBufferSize = TryGetIntEnvVar("MAX_WRITE_TO_STAGING_BATCH_BUFFER_SIZE", 2048);
             StartFromBlock = TryGetLongEnvVar("START_FROM_BLOCK", 12529458L);
-            HubAddress = TryGetStringEnvVar("HUB_ADDRESS", "0x29b9a7fbb8995b2423a71cc17cf9810798f6c543");
+            HubAddress = TryGetStringEnvVar("HUB_ADDRESS", "0x29b9a7fBb8995b2423a71cC17cf9810798F6C543");
             DelayStartup = TryGetIntEnvVar("DELAY_START", 0);
+            
+            
+            
+            MultiSendContractAddress = TryGetStringEnvVar("MULTI_SEND_ADDRESS", "");
             
 
             Console.WriteLine("Configuration: ");
