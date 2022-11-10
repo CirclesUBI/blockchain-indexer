@@ -25,6 +25,9 @@ The configuration can be changed further with environment variables. See [Settin
 * eth_transfer
 * gnosis_safe_eth_transfer
 
+## Database diagram
+![ER Diagram](Indexer_ER_diagram.png)
+
 ## Websocket server
 The indexer creates a websocket server to which any client can connect to receive a stream of the last indexed transaction hashes.  
 Example message:  

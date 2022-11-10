@@ -2761,6 +2761,7 @@ drop table stale_cached_trust_relations;
 end;
 $$;
 
+begin transaction;
 
 alter table cache_crc_balances_by_safe_and_token add column safe_address_id int;
 alter table cache_crc_balances_by_safe_and_token add column token_address_id int;
@@ -3121,5 +3122,804 @@ begin
 
     drop table stale_cached_trust_relations;
 
+end;
+$$;
+
+commit;
+
+begin transaction;
+
+alter table cache_crc_current_trust add column last_change_at_block numeric;
+alter table cache_crc_balances_by_safe_and_token add column last_change_at_block numeric;
+
+update cache_crc_balances_by_safe_and_token
+set last_change_at_block = b.number
+from block b
+where b.timestamp = cache_crc_balances_by_safe_and_token.last_change_at;
+
+update cache_crc_current_trust
+set last_change_at_block = b.number
+from block b
+where b.timestamp = cache_crc_current_trust.last_change;
+
+
+create or replace procedure import_from_staging_2()
+    language plpgsql
+as
+$$
+declare
+    selected_at_ts timestamp;
+begin
+
+    -- Cleanup all duplicate blocks (duplicate number, different hash)
+    -- and leave only the newer blocks.
+    drop table if exists disambiguated_blocks;
+    create temp table disambiguated_blocks
+    as
+    select number, max(distinct timestamp) as timestamp
+    from _block_staging
+    group by number
+    having count(distinct timestamp) > 1;
+
+    delete from _crc_hub_transfer_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _crc_organisation_signup_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _crc_signup_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _crc_trust_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _erc20_transfer_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _eth_transfer_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _gnosis_safe_eth_transfer_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _transaction_staging b
+        using disambiguated_blocks d
+    where b.block_number = d.number
+      and b.timestamp < d.timestamp;
+
+    delete from _block_staging b
+        using disambiguated_blocks d
+    where b.number = d.number
+      and b.timestamp < d.timestamp;
+
+    select now() into selected_at_ts;
+
+-- Set 'selected_at' of all complete staging blocks
+    with complete_staging_blocks as (
+        select bs.number, bs.total_transaction_count, count(distinct ts.hash)
+        from _block_staging bs
+                 left join _transaction_staging ts on bs.number = ts.block_number
+        group by bs.number, bs.total_transaction_count
+        having count(distinct ts.hash) = bs.total_transaction_count
+    )
+    update _block_staging bs
+    set selected_at = selected_at_ts
+    from complete_staging_blocks csb
+    where bs.selected_at is null
+      and bs.already_available is null
+      and bs.imported_at is null
+      and bs.number = csb.number;
+
+    -- Set 'already_available' and remove 'selected_at' on all selected entries which are already
+-- completely imported.
+    with completed_blocks as (
+        select b.number, b.total_transaction_count, count(distinct t.hash)
+        from _block_staging bs
+                 join block b on bs.number = b.number
+                 left join transaction_2 t on b.number = t.block_number
+        group by b.number, b.total_transaction_count
+        having count(distinct t.hash) = b.total_transaction_count
+    )
+    update _block_staging bs
+    set already_available = true,
+        selected_at = null
+    from completed_blocks
+    where bs.number = completed_blocks.number;
+
+-- insert all selected blocks
+    insert into block
+    select distinct sb.number, sb.hash, sb.timestamp, sb.total_transaction_count, 0 as indexed_transaction_count
+    from _block_staging sb
+    where sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+-- insert all transactions of all selected blocks
+    insert into transaction_2
+    select distinct ts2.block_number
+                  , ts2."from"
+                  , ts2."to"
+                  , ts2.hash
+                  , ts2.index
+                  , ts2.timestamp
+                  , ts2.value::numeric
+                  , ts2.input
+                  , ts2.nonce
+                  , ts2.type
+                  , ts2.classification
+    from _block_staging sb
+             join _transaction_staging ts2 on sb.number= ts2.block_number
+    where sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+    insert into crc_hub_transfer_2
+    select distinct ts2.hash
+                  , ts2.index
+                  , ts2.timestamp
+                  , ts2.block_number
+                  , ts2."from"
+                  , ts2."to"
+                  , ts2.value::numeric
+    from _block_staging sb
+             join _crc_hub_transfer_staging ts2 on sb.number= ts2.block_number
+        and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+    insert into crc_organisation_signup_2
+    select distinct ts2.hash
+                  , ts2.index
+                  , ts2.timestamp
+                  , ts2.block_number
+                  , ts2.organisation
+                  , ts2.owners
+    from _block_staging sb
+             join _crc_organisation_signup_staging ts2 on sb.number = ts2.block_number
+        and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+    insert into crc_signup_2
+    select distinct ts2.hash
+                  , ts2.index
+                  , ts2.timestamp
+                  , ts2.block_number
+                  , ts2."user"
+                  , ts2.token
+                  , ts2.owners
+    from _block_staging sb
+             join _crc_signup_staging ts2 on sb.number = ts2.block_number
+        and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+    insert into cache_all_addresses  (type, address)
+    select 'token', token
+    from _crc_signup_staging
+    union all
+    select 'safe', "user"
+    from _crc_signup_staging
+    union all
+    select 'safe', organisation
+    from _crc_organisation_signup_staging
+    on conflict do nothing;
+
+    insert into crc_trust_2
+    select distinct ts2.hash
+                  , ts2.index
+                  , ts2.timestamp
+                  , ts2.block_number
+                  , ts2.address
+                  , ts2.can_send_to
+                  , ts2."limit"
+    from _block_staging sb
+             join _crc_trust_staging ts2 on sb.number = ts2.block_number
+        and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+    insert into erc20_transfer_2
+    select distinct ts2.hash
+                  , ts2.index
+                  , ts2.timestamp
+                  , ts2.block_number
+                  , ts2."from"
+                  , ts2."to"
+                  , ts2.token
+                  , ts2.value::numeric
+    from _block_staging sb
+             join _erc20_transfer_staging ts2 on sb.number = ts2.block_number
+        and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+    insert into eth_transfer_2
+    select distinct ts2.hash
+                  , ts2.index
+                  , ts2.timestamp
+                  , ts2.block_number
+                  , ts2."from"
+                  , ts2."to"
+                  , ts2.value::numeric
+    from _block_staging sb
+             join _eth_transfer_staging ts2 on sb.number = ts2.block_number
+        and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+    insert into gnosis_safe_eth_transfer_2
+    select distinct ts2.hash
+                  , ts2.index
+                  , ts2.timestamp
+                  , ts2.block_number
+                  , ts2.initiator
+                  , ts2."from"
+                  , ts2."to"
+                  , ts2.value::numeric
+    from _block_staging sb
+             join _gnosis_safe_eth_transfer_staging ts2 on sb.number = ts2.block_number
+        and sb.selected_at = selected_at_ts
+    on conflict do nothing;
+
+    update _block_staging
+    set
+        imported_at = now()
+      , selected_at = null
+    where selected_at = selected_at_ts
+       or already_available is not null;
+
+    --
+-- Take care of possibly outdated cached crc balances
+--
+    create temporary table stale_cached_balances as
+    select "from" as safe_address
+    from _erc20_transfer_staging
+             join crc_all_signups cas on _erc20_transfer_staging."from" = cas."user"
+    union
+    select "to" as safe_address
+    from _erc20_transfer_staging
+             join crc_all_signups cas on _erc20_transfer_staging."to" = cas."user"
+    union
+    select "from" as safe_address
+    from _crc_hub_transfer_staging
+             join crc_all_signups cas on _crc_hub_transfer_staging."from" = cas."user"
+    union
+    select "to" as safe_address
+    from _crc_hub_transfer_staging
+             join crc_all_signups cas on _crc_hub_transfer_staging."to" = cas."user";
+
+    create unique index t_ux_stale_cached_balances_safe_address on stale_cached_balances(safe_address);
+
+    delete from cache_crc_balances_by_safe_and_token c
+        using stale_cached_balances s
+    where s.safe_address = c.safe_address;
+
+    insert into cache_crc_balances_by_safe_and_token (
+                                                       safe_address
+                                                     , token
+                                                     , token_owner
+                                                     , balance
+                                                     , last_change_at
+                                                     , safe_address_id
+                                                     , token_address_id
+                                                     , token_owner_address_id
+                                                     , last_change_at_block
+    )
+    select b.safe_address
+         , token
+         , token_owner
+         , balance
+         , b.last_change_at
+         , a1.id as safe_address_id
+         , a2.id as token_address_id
+         , a3.id as token_owner_address_id
+         , bl.number as last_change_at_block
+    from crc_balances_by_safe_and_token_2 b
+             left join cache_all_addresses a1 on a1.address = b.safe_address
+             left join cache_all_addresses a2 on a2.address = b.token
+             left join cache_all_addresses a3 on a3.address = b.token_owner
+             join block bl on bl.timestamp = b.last_change_at
+    where b.safe_address = ANY((select array_agg(safe_address) from stale_cached_balances)::text[]);
+
+    drop table stale_cached_balances;
+
+    create temporary table stale_cached_trust_relations as
+    select address safe_address
+    from _crc_trust_staging
+    union
+    select can_send_to safe_address
+    from _crc_trust_staging;
+
+    create unique index t_ux_stale_cached_trust_relations_safe_address on stale_cached_trust_relations(safe_address);
+
+    delete from cache_crc_current_trust c
+        using stale_cached_trust_relations s
+    where s.safe_address = c."user"
+       or  s.safe_address = c."can_send_to";
+
+    insert into cache_crc_current_trust (
+                                          "user"
+                                        , user_token
+                                        , can_send_to
+                                        , can_send_to_token
+                                        , "limit"
+                                        , history_count
+                                        , last_change
+                                        , user_address_id
+                                        , user_token_address_id
+                                        , can_send_to_address_id
+                                        , can_send_to_token_address_id
+                                        , last_change_at_block
+    )
+    select b."user"
+         , b.user_token
+         , b.can_send_to
+         , b.can_send_to_token
+         , b."limit"
+         , b.history_count
+         , b.last_change
+         , a1.id as user_address_id
+         , a2.id as user_token_address_id
+         , a3.id as can_send_to_address_id
+         , a4.id as can_send_to_token_address_id
+         , bl.number as last_change_at_block
+    from crc_current_trust_2 b
+             left join cache_all_addresses a1 on a1.address = b."user"
+             left join cache_all_addresses a2 on a2.address = b."user_token"
+             left join cache_all_addresses a3 on a3.address = b."can_send_to"
+             left join cache_all_addresses a4 on a4.address = b."can_send_to_token"
+             join block bl on bl.timestamp = b.last_change
+    where b."user" = ANY((select array_agg(safe_address) from stale_cached_trust_relations)::text[])
+       or b."can_send_to" = ANY((select array_agg(safe_address) from stale_cached_trust_relations)::text[]);
+
+    drop table stale_cached_trust_relations;
+
+end;
+$$;
+
+commit;
+create or replace function get_capacity_changes_since_block(since_block numeric)
+    returns TABLE(token_holder text, token text, balance numeric, can_send_to text, can_send_to_is_orga boolean, capacity numeric)
+    language plpgsql
+as
+$$
+declare
+begin
+    RETURN QUERY
+        WITH accepted_tokens AS (
+            SELECT ct.can_send_to AS potential_token_receiver,
+                   ct.user_token  AS accepted_token,
+                   cas.token                           AS potential_token_receivers_own_token,
+                   cas.token IS NULL                   AS potential_token_receiver_is_orga,
+                   ct."limit",
+                   ct.last_change_at_block
+            FROM cache_crc_current_trust ct
+                     JOIN crc_all_signups cas ON ct.can_send_to = cas."user"
+        ), total_holdings AS (
+            SELECT balances.safe_address                                                AS token_holder,
+                   balances.balance,
+                   accepted_tokens.accepted_token                                       AS token,
+                   accepted_tokens.potential_token_receiver                             AS can_send_to,
+                   accepted_tokens.potential_token_receiver_is_orga                     AS can_send_to_is_orga,
+                   accepted_tokens.potential_token_receivers_own_token = balances.token AS is_receivers_own_token,
+                   accepted_tokens."limit",
+                   balances.last_change_at_block                                        AS balance_last_change_at_block,
+                   accepted_tokens.last_change_at_block                                 AS trust_last_change_at_block
+            FROM accepted_tokens
+                     JOIN cache_crc_balances_by_safe_and_token balances ON accepted_tokens.accepted_token = balances.token
+            WHERE balances.safe_address <> '0x0000000000000000000000000000000000000000'::text
+              AND balances.safe_address <> '0x0000000000000000000000000000000000000001'::text
+              AND balances.balance > 0::numeric
+              AND balances.safe_address <> accepted_tokens.potential_token_receiver
+        ), with_token_owners AS (
+            SELECT h.token_holder,
+                   h.balance,
+                   h.token,
+                   h.can_send_to,
+                   h.can_send_to_is_orga,
+                   h.is_receivers_own_token,
+                   h."limit",
+                   s."user" AS token_owner,
+                   h.balance_last_change_at_block,
+                   h.trust_last_change_at_block
+            FROM total_holdings h
+                     LEFT JOIN crc_all_signups s ON s.token = h.token
+        ), with_token_owner_balance AS (
+            SELECT h.token_holder,
+                   h.balance,
+                   h.token,
+                   h.can_send_to,
+                   h.can_send_to_is_orga,
+                   h.is_receivers_own_token,
+                   h."limit",
+                   h.token_owner,
+                   h.balance_last_change_at_block,
+                   h.trust_last_change_at_block,
+                   COALESCE(b.balance, 0::numeric) AS token_owners_own_balance
+            FROM with_token_owners h
+                     LEFT JOIN cache_crc_balances_by_safe_and_token b ON h.token_owner = b.safe_address AND h.token = b.token
+        ), with_max_transferable_amount AS (
+            SELECT with_token_owner_balance.token_holder,
+                   with_token_owner_balance.balance,
+                   with_token_owner_balance.token,
+                   with_token_owner_balance.can_send_to,
+                   with_token_owner_balance.can_send_to_is_orga,
+                   with_token_owner_balance.is_receivers_own_token,
+                   with_token_owner_balance."limit",
+                   with_token_owner_balance.token_owner,
+                   with_token_owner_balance.balance_last_change_at_block,
+                   with_token_owner_balance.trust_last_change_at_block,
+                   with_token_owner_balance.token_owners_own_balance,
+                   with_token_owner_balance.token_owners_own_balance *
+                   with_token_owner_balance."limit" / 100::numeric AS max_transferable_amount
+            FROM with_token_owner_balance
+        ), with_receiver_balance AS (
+            SELECT h.token_holder,
+                   h.balance,
+                   h.token,
+                   h.can_send_to,
+                   h.can_send_to_is_orga,
+                   h.is_receivers_own_token,
+                   h."limit",
+                   h.token_owner,
+                   h.balance_last_change_at_block,
+                   h.trust_last_change_at_block,
+                   h.token_owners_own_balance,
+                   h.max_transferable_amount,
+                   COALESCE(b.balance, 0::numeric)                                             AS receiver_token_balance,
+                   COALESCE(b.balance, 0::numeric) * (100::numeric - h."limit") /
+                   100::numeric                                                                AS receiver_token_balance_scaled
+            FROM with_max_transferable_amount h
+                     LEFT JOIN cache_crc_balances_by_safe_and_token b ON h.can_send_to = b.safe_address AND h.token = b.token
+        ), max_capacity AS (
+            SELECT with_receiver_balance.token_holder,
+                   with_receiver_balance.balance,
+                   with_receiver_balance.token,
+                   with_receiver_balance.can_send_to,
+                   with_receiver_balance.can_send_to_is_orga,
+                   with_receiver_balance.is_receivers_own_token,
+                   with_receiver_balance."limit",
+                   with_receiver_balance.token_owner,
+                   with_receiver_balance.balance_last_change_at_block,
+                   with_receiver_balance.trust_last_change_at_block,
+                   with_receiver_balance.token_owners_own_balance,
+                   with_receiver_balance.max_transferable_amount,
+                   with_receiver_balance.receiver_token_balance,
+                   with_receiver_balance.receiver_token_balance_scaled,
+                   with_receiver_balance.max_transferable_amount -
+                   with_receiver_balance.receiver_token_balance_scaled AS max_capacity
+            FROM with_receiver_balance
+        ), final AS (
+            SELECT max_capacity.token_holder,
+                   max_capacity.balance,
+                   max_capacity.token,
+                   max_capacity.can_send_to,
+                   max_capacity.can_send_to_is_orga,
+                   max_capacity.is_receivers_own_token,
+                   max_capacity."limit",
+                   max_capacity.token_owner,
+                   max_capacity.balance_last_change_at_block,
+                   max_capacity.trust_last_change_at_block,
+                   max_capacity.token_owners_own_balance,
+                   max_capacity.max_transferable_amount,
+                   max_capacity.receiver_token_balance,
+                   max_capacity.receiver_token_balance_scaled,
+                   max_capacity.max_capacity,
+                   max_capacity.receiver_token_balance > 0::numeric AND
+                   max_capacity.max_transferable_amount < max_capacity.receiver_token_balance AS zero,
+                   CASE WHEN max_capacity.max_capacity < max_capacity.balance
+                            THEN max_capacity.max_capacity
+                        ELSE max_capacity.balance
+                       END                                                                    AS actual_capacity
+            FROM max_capacity
+        )
+        SELECT final.token_holder,
+               final.token,
+               final.balance,
+               final.can_send_to,
+               final.can_send_to_is_orga,
+               CASE
+                   WHEN final.is_receivers_own_token OR final.can_send_to_is_orga THEN final.balance
+                   ELSE
+                       CASE WHEN final.zero
+                                THEN 0::numeric
+                            ELSE final.actual_capacity
+                           END
+                   END AS capacity
+        FROM final
+        where balance_last_change_at_block >= since_block
+           or trust_last_change_at_block >= since_block;
+end;
+$$;
+
+
+drop view crc_capacity_graph;
+create or replace view crc_capacity_graph (token_holder, token, token_owner, balance, can_send_to, can_send_to_is_orga, capacity) as
+WITH accepted_tokens AS (SELECT cache_crc_current_trust.can_send_to AS potential_token_receiver,
+                                cache_crc_current_trust.user_token  AS accepted_token,
+                                cache_crc_current_trust."user"      AS accepted_token_owner,
+                                cas.token                           AS potential_token_receivers_own_token,
+                                cas.token IS NULL                   AS potential_token_receiver_is_orga,
+                                cache_crc_current_trust."limit"
+                         FROM cache_crc_current_trust
+                                  JOIN crc_all_signups cas ON cache_crc_current_trust.can_send_to = cas."user"
+                         WHERE cache_crc_current_trust."limit" > 0::numeric),
+     total_holdings AS (SELECT balances.safe_address                                                AS token_holder,
+                               balances.balance,
+                               accepted_tokens.accepted_token                                       AS token,
+                               accepted_tokens.accepted_token_owner                                 AS token_owner,
+                               accepted_tokens.potential_token_receiver                             AS can_send_to,
+                               accepted_tokens.potential_token_receiver_is_orga                     AS can_send_to_is_orga,
+                               accepted_tokens.potential_token_receivers_own_token = balances.token AS is_receivers_own_token,
+                               accepted_tokens."limit"
+                        FROM accepted_tokens
+                                 JOIN cache_crc_balances_by_safe_and_token balances
+                                      ON accepted_tokens.accepted_token = balances.token
+                        WHERE balances.safe_address <> '0x0000000000000000000000000000000000000000'::text
+                          AND balances.safe_address <> '0x0000000000000000000000000000000000000001'::text
+                          AND balances.balance > 0::numeric
+                          AND balances.safe_address <> accepted_tokens.potential_token_receiver),
+     with_token_owners AS (SELECT h.token_holder,
+                                  h.balance,
+                                  h.token,
+                                  h.can_send_to,
+                                  h.can_send_to_is_orga,
+                                  h.is_receivers_own_token,
+                                  h."limit",
+                                  s."user" AS token_owner
+                           FROM total_holdings h
+                                    LEFT JOIN crc_all_signups s ON s.token = h.token),
+     with_token_owner_balance AS (SELECT h.token_holder,
+                                         h.balance,
+                                         h.token,
+                                         h.can_send_to,
+                                         h.can_send_to_is_orga,
+                                         h.is_receivers_own_token,
+                                         h."limit",
+                                         h.token_owner,
+                                         COALESCE(b.balance, 0::numeric) AS token_owners_own_balance
+                                  FROM with_token_owners h
+                                           LEFT JOIN cache_crc_balances_by_safe_and_token b
+                                                     ON h.token_owner = b.safe_address AND h.token = b.token),
+     with_max_transferable_amount AS (SELECT with_token_owner_balance.token_holder,
+                                             with_token_owner_balance.balance,
+                                             with_token_owner_balance.token,
+                                             with_token_owner_balance.can_send_to,
+                                             with_token_owner_balance.can_send_to_is_orga,
+                                             with_token_owner_balance.is_receivers_own_token,
+                                             with_token_owner_balance."limit",
+                                             with_token_owner_balance.token_owner,
+                                             with_token_owner_balance.token_owners_own_balance,
+                                             with_token_owner_balance.token_owners_own_balance *
+                                             with_token_owner_balance."limit" / 100::numeric AS max_transferable_amount
+                                      FROM with_token_owner_balance),
+     with_receiver_balance AS (SELECT h.token_holder,
+                                      h.balance,
+                                      h.token,
+                                      h.can_send_to,
+                                      h.can_send_to_is_orga,
+                                      h.is_receivers_own_token,
+                                      h."limit",
+                                      h.token_owner,
+                                      h.token_owners_own_balance,
+                                      h.max_transferable_amount,
+                                      COALESCE(b.balance, 0::numeric)                                             AS receiver_token_balance,
+                                      COALESCE(b.balance, 0::numeric) * (100::numeric - h."limit") /
+                                      100::numeric                                                                AS receiver_token_balance_scaled
+                               FROM with_max_transferable_amount h
+                                        LEFT JOIN cache_crc_balances_by_safe_and_token b
+                                                  ON h.can_send_to = b.safe_address AND h.token = b.token),
+     max_capacity AS (SELECT with_receiver_balance.token_holder,
+                             with_receiver_balance.balance,
+                             with_receiver_balance.token,
+                             with_receiver_balance.can_send_to,
+                             with_receiver_balance.can_send_to_is_orga,
+                             with_receiver_balance.is_receivers_own_token,
+                             with_receiver_balance."limit",
+                             with_receiver_balance.token_owner,
+                             with_receiver_balance.token_owners_own_balance,
+                             with_receiver_balance.max_transferable_amount,
+                             with_receiver_balance.receiver_token_balance,
+                             with_receiver_balance.receiver_token_balance_scaled,
+                             with_receiver_balance.max_transferable_amount -
+                             with_receiver_balance.receiver_token_balance_scaled AS max_capacity
+                      FROM with_receiver_balance),
+     final AS (SELECT max_capacity.token_holder,
+                      max_capacity.balance,
+                      max_capacity.token,
+                      max_capacity.can_send_to,
+                      max_capacity.can_send_to_is_orga,
+                      max_capacity.is_receivers_own_token,
+                      max_capacity."limit",
+                      max_capacity.token_owner,
+                      max_capacity.token_owners_own_balance,
+                      max_capacity.max_transferable_amount,
+                      max_capacity.receiver_token_balance,
+                      max_capacity.receiver_token_balance_scaled,
+                      max_capacity.max_capacity,
+                      max_capacity.receiver_token_balance > 0::numeric AND
+                      max_capacity.max_transferable_amount < max_capacity.receiver_token_balance AS zero,
+                      CASE
+                          WHEN max_capacity.max_capacity < max_capacity.balance THEN max_capacity.max_capacity
+                          ELSE max_capacity.balance
+                          END                                                                    AS actual_capacity
+               FROM max_capacity)
+SELECT final.token_holder,
+       final.token,
+       final.token_owner,
+       final.balance,
+       final.can_send_to,
+       final.can_send_to_is_orga,
+       CASE
+           WHEN final.is_receivers_own_token OR final.can_send_to_is_orga THEN final.balance
+           ELSE
+               CASE
+                   WHEN final.zero THEN 0::numeric
+                   ELSE final.actual_capacity
+                   END
+           END AS capacity
+FROM final;
+
+create or replace function get_capacity_changes_since_block(since_block numeric)
+    returns TABLE(token_holder text, token text, balance numeric, can_send_to text, can_send_to_is_orga boolean, capacity numeric)
+    language plpgsql
+as
+$$
+declare
+begin
+    RETURN QUERY
+        WITH accepted_tokens AS (
+            SELECT ct.can_send_to AS potential_token_receiver,
+                   ct.user_token  AS accepted_token,
+                   ct."user"      AS accepted_token_owner,
+                   cas.token                           AS potential_token_receivers_own_token,
+                   cas.token IS NULL                   AS potential_token_receiver_is_orga,
+                   ct."limit",
+                   ct.last_change_at_block
+            FROM cache_crc_current_trust ct
+                     JOIN crc_all_signups cas ON ct.can_send_to = cas."user"
+        ), total_holdings AS (
+            SELECT balances.safe_address                                                AS token_holder,
+                   balances.balance,
+                   accepted_tokens.accepted_token                                       AS token,
+                   accepted_tokens.accepted_token_owner                                 AS token_owner,
+                   accepted_tokens.potential_token_receiver                             AS can_send_to,
+                   accepted_tokens.potential_token_receiver_is_orga                     AS can_send_to_is_orga,
+                   accepted_tokens.potential_token_receivers_own_token = balances.token AS is_receivers_own_token,
+                   accepted_tokens."limit",
+                   balances.last_change_at_block                                        AS balance_last_change_at_block,
+                   accepted_tokens.last_change_at_block                                 AS trust_last_change_at_block
+            FROM accepted_tokens
+                     JOIN cache_crc_balances_by_safe_and_token balances ON accepted_tokens.accepted_token = balances.token
+            WHERE balances.safe_address <> '0x0000000000000000000000000000000000000000'::text
+              AND balances.safe_address <> '0x0000000000000000000000000000000000000001'::text
+              AND balances.balance > 0::numeric
+              AND balances.safe_address <> accepted_tokens.potential_token_receiver
+        ), with_token_owners AS (
+            SELECT h.token_holder,
+                   h.balance,
+                   h.token,
+                   h.can_send_to,
+                   h.can_send_to_is_orga,
+                   h.is_receivers_own_token,
+                   h."limit",
+                   s."user" AS token_owner,
+                   h.balance_last_change_at_block,
+                   h.trust_last_change_at_block
+            FROM total_holdings h
+                     LEFT JOIN crc_all_signups s ON s.token = h.token
+        ), with_token_owner_balance AS (
+            SELECT h.token_holder,
+                   h.balance,
+                   h.token,
+                   h.can_send_to,
+                   h.can_send_to_is_orga,
+                   h.is_receivers_own_token,
+                   h."limit",
+                   h.token_owner,
+                   h.balance_last_change_at_block,
+                   h.trust_last_change_at_block,
+                   COALESCE(b.balance, 0::numeric) AS token_owners_own_balance
+            FROM with_token_owners h
+                     LEFT JOIN cache_crc_balances_by_safe_and_token b ON h.token_owner = b.safe_address AND h.token = b.token
+        ), with_max_transferable_amount AS (
+            SELECT with_token_owner_balance.token_holder,
+                   with_token_owner_balance.balance,
+                   with_token_owner_balance.token,
+                   with_token_owner_balance.can_send_to,
+                   with_token_owner_balance.can_send_to_is_orga,
+                   with_token_owner_balance.is_receivers_own_token,
+                   with_token_owner_balance."limit",
+                   with_token_owner_balance.token_owner,
+                   with_token_owner_balance.balance_last_change_at_block,
+                   with_token_owner_balance.trust_last_change_at_block,
+                   with_token_owner_balance.token_owners_own_balance,
+                   with_token_owner_balance.token_owners_own_balance *
+                   with_token_owner_balance."limit" / 100::numeric AS max_transferable_amount
+            FROM with_token_owner_balance
+        ), with_receiver_balance AS (
+            SELECT h.token_holder,
+                   h.balance,
+                   h.token,
+                   h.can_send_to,
+                   h.can_send_to_is_orga,
+                   h.is_receivers_own_token,
+                   h."limit",
+                   h.token_owner,
+                   h.balance_last_change_at_block,
+                   h.trust_last_change_at_block,
+                   h.token_owners_own_balance,
+                   h.max_transferable_amount,
+                   COALESCE(b.balance, 0::numeric)                                             AS receiver_token_balance,
+                   COALESCE(b.balance, 0::numeric) * (100::numeric - h."limit") /
+                   100::numeric                                                                AS receiver_token_balance_scaled
+            FROM with_max_transferable_amount h
+                     LEFT JOIN cache_crc_balances_by_safe_and_token b ON h.can_send_to = b.safe_address AND h.token = b.token
+        ), max_capacity AS (
+            SELECT with_receiver_balance.token_holder,
+                   with_receiver_balance.balance,
+                   with_receiver_balance.token,
+                   with_receiver_balance.can_send_to,
+                   with_receiver_balance.can_send_to_is_orga,
+                   with_receiver_balance.is_receivers_own_token,
+                   with_receiver_balance."limit",
+                   with_receiver_balance.token_owner,
+                   with_receiver_balance.balance_last_change_at_block,
+                   with_receiver_balance.trust_last_change_at_block,
+                   with_receiver_balance.token_owners_own_balance,
+                   with_receiver_balance.max_transferable_amount,
+                   with_receiver_balance.receiver_token_balance,
+                   with_receiver_balance.receiver_token_balance_scaled,
+                   with_receiver_balance.max_transferable_amount -
+                   with_receiver_balance.receiver_token_balance_scaled AS max_capacity
+            FROM with_receiver_balance
+        ), final AS (
+            SELECT max_capacity.token_holder,
+                   max_capacity.balance,
+                   max_capacity.token,
+                   max_capacity.can_send_to,
+                   max_capacity.can_send_to_is_orga,
+                   max_capacity.is_receivers_own_token,
+                   max_capacity."limit",
+                   max_capacity.token_owner,
+                   max_capacity.balance_last_change_at_block,
+                   max_capacity.trust_last_change_at_block,
+                   max_capacity.token_owners_own_balance,
+                   max_capacity.max_transferable_amount,
+                   max_capacity.receiver_token_balance,
+                   max_capacity.receiver_token_balance_scaled,
+                   max_capacity.max_capacity,
+                   max_capacity.receiver_token_balance > 0::numeric AND
+                   max_capacity.max_transferable_amount < max_capacity.receiver_token_balance AS zero,
+                   CASE WHEN max_capacity.max_capacity < max_capacity.balance
+                            THEN max_capacity.max_capacity
+                        ELSE max_capacity.balance
+                       END                                                                    AS actual_capacity
+            FROM max_capacity
+        )
+        SELECT final.token_holder,
+               final.token,
+               final.token_owner,
+               final.balance,
+               final.can_send_to,
+               final.can_send_to_is_orga,
+               CASE
+                   WHEN final.is_receivers_own_token OR final.can_send_to_is_orga THEN final.balance
+                   ELSE
+                       CASE WHEN final.zero
+                                THEN 0::numeric
+                            ELSE final.actual_capacity
+                           END
+                   END AS capacity
+        FROM final
+        where balance_last_change_at_block >= since_block
+           or trust_last_change_at_block >= since_block;
 end;
 $$;
