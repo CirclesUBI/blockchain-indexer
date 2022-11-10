@@ -29,12 +29,16 @@ The configuration can be changed further with environment variables. See [Settin
 ![ER Diagram](Indexer_ER_diagram.png)
 
 ## Websocket server
-The indexer creates a websocket server to which any client can connect to receive a stream of the last indexed transaction hashes.  
+The indexer creates a websocket server to which any client can connect in order to receive a stream of the last indexed transaction hashes.  
 Example message:  
 ```json
 ["0xa457608171336e4dccbef7ef436a2769904a850d03a379c852bbb95f52dae582","0x0104b20fd0ed4655c2427881f1e2bbd2b655ad4669b359837da5b1ef72f58656","0x486fd78a556005073cebd5692e0ebd387e5e6d898e39a7257aceddb6d558f2f0","0xa8979b035c79acc408786856241afbc53c4c2213ad552dd6fc9fa36ec2bad536","0x2de1c915ac4872795050f9085c58451a878603e25ae745f64c130ac6038a7e6f","0xd9cdd53ce5f5e7998bdc0323c7770c346048ab48c8f84dd1e394151979f31a7d","0xac54d87e4965e474fd5996c0fd4729fae121836090e1a46761309a19dc052176","0x8e2bb90ee547902e53392f4433110b57ddcb813af9ca948ef7fc04b114249655","0xbd8a432ca4e40a00953f9f268a921ec87dafd2e7c6da0766855816eb1e66d791","0x375d12f40caaef02ef0db8a24eeed1c54ab88fa2b5a48a26af36abbcb82b917e","0x344ea59f582690b70ce12b74aad9a8842cda467ad62afd5da486f2a2d091eada","0x343d5fb4ddec41319178521822c0eda06a76cdc49d9c0b43427f2c9819db3931","0x2674194ff89daddaed09de96baf7128401efe1c031b43e65148bf3d581725b43","0xfa78330d4de0d742f286d5fcf6f2a26c28322fa6156dc1202034628a877d2d34","0xd721d7a5ec7f5ec83fe0162ade62758d4af26cd50d1467d546d8674ceb82f61f","0xe947a66859a365f391166907746a2635cd7254cc19ce0c3c2b329f8909ed572b","0x41c42d20c170e57245908a01e3828cace349bd4359510ff2711556dd3a868863","0xa5d686ecb48eddcd3cbec8b234109891f03d5df4c2762d90dd812405522f40ad","0x8a967f11472850714cda9f55cb7e4aea5a998fe92fedd791662ed54bb9fc10d8","0x08184f71daf1e240b6f1a7a70e3856cce0c547cd3d3fb80c2d658b553fe56f17","0x9a406be95c1a92989c04eb18da60acf84fbc3a2d8019292e66eeba2e52b65c46","0x023465a298509ec27c2e20a7afaf38ecbd5b0131d12f33156ce00ba71f82d30c"]
 ```
-The websocket server will only yield events when the IntervalSource is active.
+The websocket server will only yield events when the IntervalSource or LiveSource is active.
+The indexer will send a magic transaction hash whenever a re-org occurs:
+```json
+["0xdeadbeef00000000000000000000000000000000000000000000000000000000"]
+```
 
 ## How it works
 The service uses an Akka.Net [stream](https://github.com/circlesland/blockchain-indexer/blob/997a0b393317882412bd2ad499cf1bdea34f1e0b/CirclesLand.BlockchainIndexer/Indexer..cs#L107) to process the incoming blocks. The basic flow is as following:
