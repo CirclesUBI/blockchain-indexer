@@ -3,7 +3,7 @@
 Indexes all Circles related transactions on the xDai blockchain from block 12529458 (deployment of the Circles Hub Contract) onwards in a postgres database. It provides no api to query the database.
 
 ## Quickstart
-1) Create a new database with [schema](https://github.com/circlesland/blockchain-indexer/blob/main/CirclesLand.BlockchainIndexer/Schema.sql) on a postgres server
+1) Create a new database with [schema](https://github.com/circlesland/blockchain-indexer/tree/main/CirclesLand.BlockchainIndexer/DatabaseMigrations/1.0.0.sql) on a postgres server
 2) Pull the docker image: `docker pull ghcr.io/circlesland/blockchain-indexer:[IMAGE_VERSION]`
 3) Run with
    ```shell
