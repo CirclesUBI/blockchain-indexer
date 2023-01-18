@@ -17,6 +17,12 @@ ProjectSection(SolutionItems) = preProject
 	.github\workflows\build-and-push.yml = .github\workflows\build-and-push.yml
 EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docker", "docker", "{A0D371AD-3B92-4051-BB72-3329A5AFAE34}"
+	ProjectSection(SolutionItems) = preProject
+		Dockerfile = Dockerfile
+		package.json = package.json
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
