@@ -1,28 +1,17 @@
-name: deploy dev
+name: Build and push the dev image
+
 on:
   push:
     branches: [ dev ]
-  pull_request:
-    branches: [ dev ]
+
 jobs:
-  build-docker-image:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - id: readPackageJson
-        run: |
-          content=`cat CirclesLand.BlockchainIndexer.Server/package.json`
-          # the following lines are only required for multi line json
-          content="${content//'%'/'%25'}"
-          content="${content//$'\n'/'%0A'}"
-          content="${content//$'\r'/'%0D'}"
-          # end of optional handling for multi line json
-          echo "::set-output name=packageJson::$content"
-      - name: Build and publish the docker image
-        env:
-          DOCKER_REGISTRY_USER: ${{secrets.DOCKER_REGISTRY_USER}}
-          DOCKER_REGISTRY_PASSWORD: ${{secrets.DOCKER_REGISTRY_PASSWORD}}
-        run: |
-          docker login https://ghcr.io -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASSWORD
-          docker build -f CirclesLand.BlockchainIndexer.Server/Dockerfile . --tag ghcr.io/circlesland/blockchain-indexer-dev:latest --tag ghcr.io/circlesland/blockchain-indexer-dev:${{fromJson(steps.readPackageJson.outputs.packageJson).version}} --tag pathfinder-server-dev --tag dev
-          docker push ghcr.io/circlesland/blockchain-indexer-dev:${{fromJson(steps.readPackageJson.outputs.packageJson).version}}
+  call-build-and-push:
+    name: Trigger container build and push
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/build-and-push.yml
+    with:
+      ref: "${{ github.ref }}"
+      image: "blockchain-indexer"
+    secrets: inherit

@@ -13,7 +13,8 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "github", "github", "{0645A12A-D7A2-4250-90DC-26E32324F003}"
 ProjectSection(SolutionItems) = preProject
 	.github\workflows\dev.yml = .github\workflows\dev.yml
-	.github\workflows\main.yml = .github\workflows\main.yml
+	.github\workflows\codeql-analysis.yml = .github\workflows\codeql-analysis.yml
+	.github\workflows\build-and-push.yml = .github\workflows\build-and-push.yml
 EndProjectSection
 EndProject
 Global
