@@ -23,7 +23,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 connection.Execute("call import_from_staging_2();", null, transaction, timeout);
                 transaction.Commit();
 
-                var databaseSize = new NpgsqlCommand("SELECT pg_database_size('indexer');", connection).ExecuteScalar();
+                var databaseSize = new NpgsqlCommand($"SELECT pg_database_size('{connection.Database}');", connection).ExecuteScalar();
                 DatabaseSize.Set((long)(databaseSize ?? -1));
 
                 ReportRowCounts(connection, "block");
