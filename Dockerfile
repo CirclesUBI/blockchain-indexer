@@ -18,6 +18,8 @@ ENV DOTNET_EnableDiagnostics=0
 ENV INDEXER_RPC_GATEWAY_URL ''
 ENV INDEXER_CONNECTION_STRING ''
 ENV INDEXER_WEBSOCKET_PORT='8675'
+ENV ASPNETCORE_hostBuilder__reloadConfigOnChange=false
+
 WORKDIR /app
 EXPOSE 8675
 COPY --from=publish /app/publish .
