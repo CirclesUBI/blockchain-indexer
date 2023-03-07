@@ -38,8 +38,8 @@ namespace CirclesLand.BlockchainIndexer.Sources
                         {   
                             SourceMetrics.BlocksEmitted.WithLabels("reorg").Inc();
                             
-                            return new Option<(HexBigInteger, HexBigInteger)>(
-                                (new HexBigInteger(oldestReorgBlock), new HexBigInteger(oldestReorgBlock)));                            
+                            return Option<(HexBigInteger, HexBigInteger)>.Create((new HexBigInteger(oldestReorgBlock),
+                                new HexBigInteger(oldestReorgBlock)));;                            
                         }
 
                         Logger.Log($"No reorgs.");

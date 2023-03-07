@@ -1,10 +1,6 @@
 using CirclesLand.BlockchainIndexer.Api;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-using Prometheus;
 
-namespace CirclesLand.BlockchainIndexer.Server
+namespace CirclesLand.BlockchainIndexer.Server2
 {
     public class Startup
     {
@@ -21,7 +17,7 @@ namespace CirclesLand.BlockchainIndexer.Server
             app.UseEndpoints(endpoints =>
             {
                 // ...
-                endpoints.MapMetrics();
+                // endpoints.MapMetrics();
             });
             
             // enable websocket support

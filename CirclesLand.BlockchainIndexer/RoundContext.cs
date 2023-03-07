@@ -31,7 +31,7 @@ namespace CirclesLand.BlockchainIndexer
         public DateTime StartAt { get; }
         public long RoundNo { get; }
         public NpgsqlConnection Connection { get; }
-        public Web3 Web3 { get; private set;  }
+        public Web3? Web3 { get; private set;  }
         public SourceFactory SourceFactory { get; }
 
         public event EventHandler<RoundErrorEventArgs>? Error;

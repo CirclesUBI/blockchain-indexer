@@ -1,25 +1,15 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
-        <OutputType>Exe</OutputType>
-        <TargetFramework>net6.0</TargetFramework>
+        <TargetFramework>net7.0</TargetFramework>
         <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>CirclesLand.BlockchainIndexer.Server2</RootNamespace>
     </PropertyGroup>
-
-    <ItemGroup>
-      <PackageReference Include="Microsoft.AspNetCore.App" Version="2.2.8" />
-      <PackageReference Include="prometheus-net.AspNetCore" Version="7.0.0" />
-    </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\CirclesLand.BlockchainIndexer.Api\CirclesLand.BlockchainIndexer.Api.csproj" />
       <ProjectReference Include="..\CirclesLand.BlockchainIndexer\CirclesLand.BlockchainIndexer.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <None Update="appsettings.json">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </None>
     </ItemGroup>
 
 </Project>

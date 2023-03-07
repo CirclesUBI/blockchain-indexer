@@ -1,19 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net6.0</TargetFramework>
+        <TargetFramework>net7.0</TargetFramework>
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Akka.Streams" Version="1.4.49" />
+      <PackageReference Include="Akka.Streams" Version="1.5.0" />
       <PackageReference Include="Dapper" Version="2.0.123" />
-      <PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.0" />
-      <PackageReference Include="Nethereum.Hex" Version="4.12.0" />
-      <PackageReference Include="Nethereum.JsonRpc.WebSocketClient" Version="4.12.0" />
-      <PackageReference Include="Nethereum.Web3" Version="4.12.0" />
-      <PackageReference Include="Npgsql" Version="7.0.1" />
-      <PackageReference Include="prometheus-net" Version="7.0.0" />
+      <PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.1" />
+      <PackageReference Include="Nethereum.Hex" Version="4.13.0" />
+      <PackageReference Include="Nethereum.JsonRpc.WebSocketClient" Version="4.13.0" />
+      <PackageReference Include="Nethereum.Web3" Version="4.13.0" />
+      <PackageReference Include="Npgsql" Version="7.0.2" />
+      <PackageReference Include="prometheus-net" Version="8.0.0" />
     </ItemGroup>
 
     <ItemGroup>

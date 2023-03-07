@@ -57,7 +57,7 @@ namespace CirclesLand.BlockchainIndexer.Sources
                             Logger.Log($"Emitting missing block: {a.ToLong()}");
                             SourceMetrics.BlocksEmitted.WithLabels("gap").Inc();
                             
-                            return new Option<(HexBigInteger, HexBigInteger)>((a, a));
+                            return Option<(HexBigInteger, HexBigInteger)>.Create((a, a));
                         }
                     }
                     catch (Exception ex)
