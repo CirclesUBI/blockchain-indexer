@@ -1,6 +1,6 @@
 using CirclesLand.BlockchainIndexer.Api;
 
-namespace CirclesLand.BlockchainIndexer.Server2
+namespace CirclesLand.BlockchainIndexer.Server
 {
     public class Startup
     {
