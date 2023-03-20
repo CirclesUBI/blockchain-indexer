@@ -20,26 +20,26 @@ namespace CirclesLand.BlockchainIndexer.Sources
         {
             return Source.UnfoldAsync(new HexBigInteger(0), async _ =>
             {
-                await using var connection = new NpgsqlConnection(connectionString);
-                connection.Open();
-
-                var web3 = new Web3(rpcUrl);
-                
                 while (true)
                 {
+                    await using NpgsqlConnection connection = new NpgsqlConnection(connectionString);
+                    var web3 = new Web3(rpcUrl);
+
                     try
                     {
                         await Task.Delay(intervalInMs);
 
                         Logger.Log($"Checking for reorgs ..");
-                        
+                        connection.Open();
+
                         var oldestReorgBlock = await CheckForReorgsInLastBlocks(connection, web3);
                         if (oldestReorgBlock < long.MaxValue)
-                        {   
+                        {
                             SourceMetrics.BlocksEmitted.WithLabels("reorg").Inc();
-                            
+
                             return Option<(HexBigInteger, HexBigInteger)>.Create((new HexBigInteger(oldestReorgBlock),
-                                new HexBigInteger(oldestReorgBlock)));;                            
+                                new HexBigInteger(oldestReorgBlock)));
+                            ;
                         }
 
                         Logger.Log($"No reorgs.");
@@ -50,6 +50,10 @@ namespace CirclesLand.BlockchainIndexer.Sources
                         if (ex.StackTrace != null) Logger.LogError(ex.StackTrace);
 
                         throw;
+                    }
+                    finally
+                    {
+                        await connection.CloseAsync();
                     }
                 }
             });
