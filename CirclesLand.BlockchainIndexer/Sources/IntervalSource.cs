@@ -48,7 +48,7 @@ namespace CirclesLand.BlockchainIndexer.Sources
                             var nextBlockToIndex = lastBlock.Value + 1;
                             Console.WriteLine($"Catching up block: {nextBlockToIndex}");
 
-                            return new Option<(HexBigInteger, HexBigInteger)>((new HexBigInteger(nextBlockToIndex),
+                            return Option<(HexBigInteger, HexBigInteger)>.Create((new HexBigInteger(nextBlockToIndex),
                                 new HexBigInteger(nextBlockToIndex)));
                         }
 
@@ -63,8 +63,8 @@ namespace CirclesLand.BlockchainIndexer.Sources
 
                         Console.WriteLine($"Got new block: {currentBlock}");
                         SourceMetrics.BlocksEmitted.WithLabels("interval").Inc();
-
-                        return new Option<(HexBigInteger, HexBigInteger)>((currentBlock, currentBlock));
+                        
+                        return Option<(HexBigInteger, HexBigInteger)>.Create((currentBlock, currentBlock));
                     }
                     catch (Exception ex)
                     {

@@ -1,9 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Hosting;
-
 namespace CirclesLand.BlockchainIndexer.Server
 {
     public class Program
@@ -18,18 +12,18 @@ namespace CirclesLand.BlockchainIndexer.Server
             
             // This is O.K. because all dates are UTC
             AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-
+            
             using var host = Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    webBuilder.UseUrls(@$"{Settings.WebsocketServerUrl}");
+                    webBuilder.UseUrls(Settings.WebsocketServerUrl);
                     webBuilder.UseStartup<Startup>();
                 })
                 .Build();
 
             var indexer = new Indexer();
             var cancelIndexerSource = new CancellationTokenSource();
-            
+
 #pragma warning disable 4014
             indexer.Run(cancelIndexerSource.Token).ContinueWith(t =>
 #pragma warning restore 4014
@@ -52,7 +46,7 @@ namespace CirclesLand.BlockchainIndexer.Server
             }, cancelIndexerSource.Token);
 
             await host.RunAsync(cancelIndexerSource.Token);
-            
+
             try
             {
                 cancelIndexerSource.Cancel();

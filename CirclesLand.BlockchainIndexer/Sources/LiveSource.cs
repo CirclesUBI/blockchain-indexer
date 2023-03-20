@@ -1,11 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using Akka;
-using Akka.IO;
 using Akka.Streams.Dsl;
 using Akka.Util;
 using CirclesLand.BlockchainIndexer.Util;
-using Dapper;
 using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
 using Nethereum.Hex.HexTypes;
 using Nethereum.JsonRpc.Client.Streaming;
@@ -15,17 +13,16 @@ using Nethereum.RPC.Eth.Subscriptions;
 using Nethereum.Web3;
 using Newtonsoft.Json;
 using Npgsql;
-using Prometheus;
 
 namespace CirclesLand.BlockchainIndexer.Sources;
 
-public class LiveSource
+public static class LiveSource
 {
-    public static async Task<Source<HexBigInteger, NotUsed>> Create(string connectionString, string rpcUrl, long lastPersistedBlock)
+    public static Task<Source<HexBigInteger, NotUsed>> Create(string connectionString, string rpcUrl, long lastPersistedBlock)
     {
         var catchingUp = true;
             
-        return Source.UnfoldAsync(new HexBigInteger(0), async lastBlock =>
+        return Task.FromResult(Source.UnfoldAsync(new HexBigInteger(0), async lastBlock =>
         {
             await using var dbConnection = new NpgsqlConnection(connectionString);
             dbConnection.Open();
@@ -51,7 +48,8 @@ public class LiveSource
                         Console.WriteLine($"Catching up block: {nextBlockToIndex}");
 
                         SourceMetrics.BlocksEmitted.WithLabels("live").Inc();
-                        return new Option<(HexBigInteger, HexBigInteger)>((new HexBigInteger(nextBlockToIndex),
+                        
+                        return Option<(HexBigInteger, HexBigInteger)>.Create((new HexBigInteger(nextBlockToIndex),
                             new HexBigInteger(nextBlockToIndex)));
                     }
 
@@ -126,7 +124,8 @@ public class LiveSource
             }
 
             SourceMetrics.BlocksEmitted.WithLabels("live").Inc();
-            return new Option<(HexBigInteger, HexBigInteger)>((currentBlock, currentBlock));     
-        });
+            
+            return Option<(HexBigInteger, HexBigInteger)>.Create((currentBlock, currentBlock));  
+        }));
     }
 }
