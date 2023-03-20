@@ -149,10 +149,11 @@ namespace CirclesLand.BlockchainIndexer
                 Source<(int TotalTransactionsInBlock, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt Receipt), NotUsed>? activeSource = TransactionAndReceiptSource(
                     Mode == IndexerMode.CatchUp
-                        ? Source.Combine(source, GapSource.Create(120000, Settings.ConnectionString, true),
+                        ? source
+                        : combinedSource1, /* Source.Combine(source, GapSource.Create(120000, Settings.ConnectionString, true),
                             i => new Merge<HexBigInteger>(i))
                         : Source.Combine(combinedSource1, GapSource.Create(120000, Settings.ConnectionString),
-                            i => new Merge<HexBigInteger>(i)),
+                            i => new Merge<HexBigInteger>(i)),*/
                     roundContext,
                     flushEveryNthBatch);
 

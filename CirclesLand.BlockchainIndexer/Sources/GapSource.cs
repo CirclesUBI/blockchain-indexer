@@ -1,7 +1,5 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Security.Policy;
 using System.Threading.Tasks;
 using Akka;
 using Akka.Streams.Dsl;
@@ -10,10 +8,7 @@ using Akka.Util.Internal;
 using CirclesLand.BlockchainIndexer.Util;
 using Nethereum.BlockchainProcessing.BlockStorage.Entities.Mapping;
 using Nethereum.Hex.HexTypes;
-using Nethereum.RPC.Eth.DTOs;
-using Nethereum.Web3;
 using Npgsql;
-using Prometheus;
 
 namespace CirclesLand.BlockchainIndexer.Sources
 {
@@ -28,11 +23,11 @@ namespace CirclesLand.BlockchainIndexer.Sources
             var fin = finish;
             return Source.UnfoldAsync(new HexBigInteger(0), async (lastGapBlock) =>
             {
-                await using var connection = new NpgsqlConnection(connectionString);
-                connection.Open();
-
                 while (!fin)
                 {
+                    await using var connection = new NpgsqlConnection(connectionString);
+                    connection.Open();
+                    
                     try
                     {
                         if (_missingBlocks.Count == 0)
@@ -42,6 +37,7 @@ namespace CirclesLand.BlockchainIndexer.Sources
                                 fin = true;
                                 break;
                             }
+
                             Logger.Log($"Checking for gaps ..");
                             var missingBlocks = FindMissingBlocks(connection);
                             missingBlocks.ForEach(o => _missingBlocks.Enqueue(o));
@@ -49,6 +45,7 @@ namespace CirclesLand.BlockchainIndexer.Sources
                             {
                                 await Task.Delay(intervalInMs);
                             }
+
                             first = false;
                         }
                         else
@@ -56,7 +53,7 @@ namespace CirclesLand.BlockchainIndexer.Sources
                             var a = _missingBlocks.Dequeue();
                             Logger.Log($"Emitting missing block: {a.ToLong()}");
                             SourceMetrics.BlocksEmitted.WithLabels("gap").Inc();
-                            
+
                             return Option<(HexBigInteger, HexBigInteger)>.Create((a, a));
                         }
                     }
@@ -66,6 +63,10 @@ namespace CirclesLand.BlockchainIndexer.Sources
                         if (ex.StackTrace != null) Logger.LogError(ex.StackTrace);
 
                         throw;
+                    }
+                    finally
+                    {
+                        await connection.CloseAsync();
                     }
                 }
 
