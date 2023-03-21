@@ -330,151 +330,157 @@ namespace CirclesLand.BlockchainIndexer
             RoundContext roundContext,
             int flushEveryNthBatch)
         {
-            // Classify all transactions
-            await source.Select(transactionAndReceipt =>
-                {
-                    var classification = transactionAndReceipt.Receipt == null
-                        ? TransactionClass.Unknown
-                        : TransactionClassifier.Classify(
-                            transactionAndReceipt.Transaction,
-                            transactionAndReceipt.Receipt,
-                            null);
+            try
+            {
+                // Classify all transactions
+                await source.Select(transactionAndReceipt => {
+                        var classification = transactionAndReceipt.Receipt == null
+                            ? TransactionClass.Unknown
+                            : TransactionClassifier.Classify(
+                                transactionAndReceipt.Transaction,
+                                transactionAndReceipt.Receipt,
+                                null);
 
-                    if (classification.HasFlag(TransactionClass.CrcSignup))
+                        if (classification.HasFlag(TransactionClass.CrcSignup))
+                        {
+                            EventsTotal.WithLabels("crc_signup").Inc();
+                        }
+
+                        if (classification.HasFlag(TransactionClass.CrcTrust))
+                        {
+                            EventsTotal.WithLabels("crc_trust").Inc();
+                        }
+
+                        if (classification.HasFlag(TransactionClass.Erc20Transfer))
+                        {
+                            EventsTotal.WithLabels("erc20_transfer").Inc();
+                        }
+
+                        if (classification.HasFlag(TransactionClass.CrcHubTransfer))
+                        {
+                            EventsTotal.WithLabels("crc_hub_transfer").Inc();
+                        }
+
+                        if (classification.HasFlag(TransactionClass.CrcOrganisationSignup))
+                        {
+                            EventsTotal.WithLabels("crc_organization_signup").Inc();
+                        }
+
+                        if (classification.HasFlag(TransactionClass.EoaEthTransfer))
+                        {
+                            EventsTotal.WithLabels("eoa_eth_transfer").Inc();
+                        }
+
+                        if (classification.HasFlag(TransactionClass.SafeEthTransfer))
+                        {
+                            EventsTotal.WithLabels("safe_eth_transfer").Inc();
+                        }
+
+                        if (classification.HasFlag(TransactionClass.Unknown))
+                        {
+                            EventsTotal.WithLabels("other").Inc();
+                        }
+
+                        return (
+                            TotalTransactionsInBlock: transactionAndReceipt.TotalTransactionsInBlock,
+                            Timestamp: transactionAndReceipt.Timestamp,
+                            Transaction: transactionAndReceipt.Transaction,
+                            Receipt: transactionAndReceipt.Receipt,
+                            Classification: classification
+                        );
+                    })
+
+                    // Add the details for each transaction
+                    .SelectAsync(2, async classifiedTransactions =>
                     {
-                        EventsTotal.WithLabels("crc_signup").Inc();
-                    }
+                        var extractedDetails = classifiedTransactions.Receipt != null
+                            ? TransactionDetailExtractor.Extract(
+                                    classifiedTransactions.Classification,
+                                    classifiedTransactions.Transaction,
+                                    classifiedTransactions.Receipt)
+                                .ToArray()
+                            : new IDetail[] { };
 
-                    if (classification.HasFlag(TransactionClass.CrcTrust))
-                    {
-                        EventsTotal.WithLabels("crc_trust").Inc();
-                    }
+                        // For every CrcSignup-event check who the owner is
+                        var signups = extractedDetails
+                            .Where(o => o is CrcSignup)
+                            .Cast<CrcSignup>();
 
-                    if (classification.HasFlag(TransactionClass.Erc20Transfer))
-                    {
-                        EventsTotal.WithLabels("erc20_transfer").Inc();
-                    }
-
-                    if (classification.HasFlag(TransactionClass.CrcHubTransfer))
-                    {
-                        EventsTotal.WithLabels("crc_hub_transfer").Inc();
-                    }
-
-                    if (classification.HasFlag(TransactionClass.CrcOrganisationSignup))
-                    {
-                        EventsTotal.WithLabels("crc_organization_signup").Inc();
-                    }
-
-                    if (classification.HasFlag(TransactionClass.EoaEthTransfer))
-                    {
-                        EventsTotal.WithLabels("eoa_eth_transfer").Inc();
-                    }
-
-                    if (classification.HasFlag(TransactionClass.SafeEthTransfer))
-                    {
-                        EventsTotal.WithLabels("safe_eth_transfer").Inc();
-                    }
-
-                    if (classification.HasFlag(TransactionClass.Unknown))
-                    {
-                        EventsTotal.WithLabels("other").Inc();
-                    }
-
-                    return (
-                        TotalTransactionsInBlock: transactionAndReceipt.TotalTransactionsInBlock,
-                        Timestamp: transactionAndReceipt.Timestamp,
-                        Transaction: transactionAndReceipt.Transaction,
-                        Receipt: transactionAndReceipt.Receipt,
-                        Classification: classification
-                    );
-                })
-
-                // Add the details for each transaction
-                .SelectAsync(2, async classifiedTransactions =>
-                {
-                    var extractedDetails = classifiedTransactions.Receipt != null
-                        ? TransactionDetailExtractor.Extract(
-                                classifiedTransactions.Classification,
-                                classifiedTransactions.Transaction,
-                                classifiedTransactions.Receipt)
-                            .ToArray()
-                        : new IDetail[] { };
-
-                    // For every CrcSignup-event check who the owner is
-                    var signups = extractedDetails
-                        .Where(o => o is CrcSignup)
-                        .Cast<CrcSignup>();
-
-                    foreach (var signup in signups)
-                    {
-                        SafeOwnershipChecksTotal.Inc();
-
-                        var contract = roundContext.Web3!.Eth.GetContract(
-                            GnosisSafeABI.Json, signup.User);
-                        var function = contract.GetFunction("getOwners");
-                        var owners = await function.CallAsync<List<string>>();
-                        signup.Owners = owners?.Select(o => o.ToLower()).ToArray() ?? Array.Empty<string>();
-                    }
-
-                    var organisationSignups = extractedDetails
-                        .Where(o => o is CrcOrganisationSignup)
-                        .Cast<CrcOrganisationSignup>();
-
-                    foreach (var organisationSignup in organisationSignups)
-                    {
-                        try
+                        foreach (var signup in signups)
                         {
                             SafeOwnershipChecksTotal.Inc();
 
                             var contract = roundContext.Web3!.Eth.GetContract(
-                                GnosisSafeABI.Json, organisationSignup.Organization);
+                                GnosisSafeABI.Json, signup.User);
                             var function = contract.GetFunction("getOwners");
-                            var owners = (await function.CallAsync<List<string>>()) ?? new List<string>();
-                            organisationSignup.Owners = owners.Select(o => o.ToLower()).ToArray();
+                            var owners = await function.CallAsync<List<string>>();
+                            signup.Owners = owners?.Select(o => o.ToLower()).ToArray() ?? Array.Empty<string>();
                         }
-                        catch (Exception ex)
+
+                        var organisationSignups = extractedDetails
+                            .Where(o => o is CrcOrganisationSignup)
+                            .Cast<CrcOrganisationSignup>();
+
+                        foreach (var organisationSignup in organisationSignups)
                         {
-                            Console.WriteLine(ex.Message + "\n" + ex.StackTrace);
+                            try
+                            {
+                                SafeOwnershipChecksTotal.Inc();
+
+                                var contract = roundContext.Web3!.Eth.GetContract(
+                                    GnosisSafeABI.Json, organisationSignup.Organization);
+                                var function = contract.GetFunction("getOwners");
+                                var owners = (await function.CallAsync<List<string>>()) ?? new List<string>();
+                                organisationSignup.Owners = owners.Select(o => o.ToLower()).ToArray();
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine(ex.Message + "\n" + ex.StackTrace);
+                            }
                         }
-                    }
 
-                    return (
-                        TotalTransactionsInBlock: classifiedTransactions.TotalTransactionsInBlock,
-                        TxHash: classifiedTransactions.Transaction.TransactionHash,
-                        Timestamp: classifiedTransactions.Timestamp,
-                        Transaction: classifiedTransactions.Transaction,
-                        Receipt: classifiedTransactions.Receipt,
-                        Classification: classifiedTransactions.Classification,
-                        Details: extractedDetails
-                    );
-                })
-                .Buffer(Mode == IndexerMode.CatchUp ? Settings.MaxWriteToStagingBatchBufferSize : 10,
-                    OverflowStrategy.Backpressure)
-                .GroupedWithin(Settings.WriteToStagingBatchSize,
-                    TimeSpan.FromMilliseconds(Mode == IndexerMode.CatchUp
-                        ? Settings.WriteToStagingBatchMaxIntervalInSeconds * 1000
-                        : 500))
-                .RunForeach(transactionsWithExtractedDetails =>
-                {
-                    BatchesTotal.WithLabels("started").Inc();
+                        return (
+                            TotalTransactionsInBlock: classifiedTransactions.TotalTransactionsInBlock,
+                            TxHash: classifiedTransactions.Transaction.TransactionHash,
+                            Timestamp: classifiedTransactions.Timestamp,
+                            Transaction: classifiedTransactions.Transaction,
+                            Receipt: classifiedTransactions.Receipt,
+                            Classification: classifiedTransactions.Classification,
+                            Details: extractedDetails
+                        );
+                    })
+                    .Buffer(Mode == IndexerMode.CatchUp ? Settings.MaxWriteToStagingBatchBufferSize : 10,
+                        OverflowStrategy.Backpressure)
+                    .GroupedWithin(Settings.WriteToStagingBatchSize,
+                        TimeSpan.FromMilliseconds(Mode == IndexerMode.CatchUp
+                            ? Settings.WriteToStagingBatchMaxIntervalInSeconds * 1000
+                            : 500))
+                    .RunForeach(transactionsWithExtractedDetails =>
+                    {
+                        BatchesTotal.WithLabels("started").Inc();
 
-                    roundContext.Log($" Writing batch to staging tables ..");
+                        roundContext.Log($" Writing batch to staging tables ..");
 
-                    var txArr = transactionsWithExtractedDetails.ToArray();
-                    var p = TransactionsWriter.WriteTransactions(
-                        Settings.ConnectionString,
-                        txArr);
+                        var txArr = transactionsWithExtractedDetails.ToArray();
+                        var p = TransactionsWriter.WriteTransactions(
+                            Settings.ConnectionString,
+                            txArr);
 
-                    p.Wait();
+                        p.Wait();
 
-                    CompleteBatch(flushEveryNthBatch, roundContext, false, txArr);
-                    HealthService.ReportCompleteBatch(txArr.Max(o => o.Transaction.BlockNumber.ToLong()));
+                        CompleteBatch(flushEveryNthBatch, roundContext, false, txArr);
+                        HealthService.ReportCompleteBatch(txArr.Max(o => o.Transaction.BlockNumber.ToLong()));
 
-                    BatchesTotal.WithLabels("completed").Inc();
-                }, materializer);
+                        BatchesTotal.WithLabels("completed").Inc();
+                    }, materializer);
+            }
+            finally
+            {
+                await roundContext.Connection.CloseAsync();
+            }
         }
 
-        private async Task<Source<HexBigInteger, NotUsed>> DetermineSource(RoundContext roundContext,
+    private async Task<Source<HexBigInteger, NotUsed>> DetermineSource(RoundContext roundContext,
             long lastPersistedBlock,
             HexBigInteger currentBlock)
         {
