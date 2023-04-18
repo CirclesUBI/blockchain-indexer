@@ -1,0 +1,19 @@
+name: Images
+
+on:
+  push:
+    branches:
+    - main
+    - next
+    - dev
+    paths:
+    - ".github/workflows/build-push.yml"
+    - "Dockerfile"
+
+jobs:
+  call-build-and-push:
+    name: Call
+    uses: CirclesUBI/.github/.github/workflows/build-and-push.yml@main
+    with:
+      image-name: "blockchain-indexer"
+    secrets: inherit
