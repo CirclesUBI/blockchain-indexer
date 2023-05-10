@@ -377,62 +377,70 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
         public static TransactionClass Classify(Transaction transaction, TransactionReceipt receipt,
             TransactionClass? externalClasses)
         {
-            var isEoaEthTransfer = IsEoaEthTransfer(transaction, receipt, out _, out _, out _);
-            if (!isEoaEthTransfer && receipt.Logs == null)
+            try
             {
+                var isEoaEthTransfer = IsEoaEthTransfer(transaction, receipt, out _, out _, out _);
+                if (!isEoaEthTransfer && receipt.Logs == null)
+                {
+                    return TransactionClass.Unknown;
+                }
+
+                var isErc20Transfer = receipt.Logs.Any(o => IsErc20Transfer(o, out _, out _, out _, out _));
+                var isCrcSignup = IsCrcSignup(receipt, out _, out _);
+                var isCrcOrganisationSignup = receipt.Logs.Any(o => IsCrcOrganisationSignup(o, out _));
+                var isCrcHubTransfer = IsCrcHubTransfer(receipt, out _, out _, out _);
+                var isCrcTrust = receipt.Logs.Any(o => IsCrcTrust(o, out _, out _, out _));
+                var isSafeEthTransfer = IsSafeEthTransfer(transaction, receipt, out _, out _, out _, out _);
+
+
+                var classification = TransactionClass.Unknown;
+                if (isErc20Transfer)
+                {
+                    classification |= TransactionClass.Erc20Transfer;
+                }
+
+                if (isCrcSignup)
+                {
+                    classification |= TransactionClass.CrcSignup;
+                }
+
+                if (isCrcOrganisationSignup)
+                {
+                    classification |= TransactionClass.CrcOrganisationSignup;
+                }
+
+                if (isCrcHubTransfer)
+                {
+                    classification |= TransactionClass.CrcHubTransfer;
+                }
+
+                if (isCrcTrust)
+                {
+                    classification |= TransactionClass.CrcTrust;
+                }
+
+                if (isSafeEthTransfer)
+                {
+                    classification |= TransactionClass.SafeEthTransfer;
+                }
+
+                if (isSafeEthTransfer)
+                {
+                    classification |= TransactionClass.SafeEthTransfer;
+                }
+
+                if (isEoaEthTransfer)
+                {
+                    classification |= TransactionClass.EoaEthTransfer;
+                }
+
+                return classification;
+            } 
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
                 return TransactionClass.Unknown;
             }
-            
-            var isErc20Transfer = receipt.Logs.Any(o => IsErc20Transfer(o, out _, out _, out _, out _));
-            var isCrcSignup = IsCrcSignup(receipt, out _, out _);
-            var isCrcOrganisationSignup = receipt.Logs.Any(o => IsCrcOrganisationSignup(o, out _));
-            var isCrcHubTransfer = IsCrcHubTransfer(receipt, out _, out _, out _);
-            var isCrcTrust = receipt.Logs.Any(o => IsCrcTrust(o, out _, out _, out _));
-            var isSafeEthTransfer = IsSafeEthTransfer(transaction, receipt, out _, out _, out _, out _);
-            
-
-            var classification = TransactionClass.Unknown;
-            if (isErc20Transfer)
-            {
-                classification |= TransactionClass.Erc20Transfer;
-            }
-
-            if (isCrcSignup)
-            {
-                classification |= TransactionClass.CrcSignup;
-            }
-
-            if (isCrcOrganisationSignup)
-            {
-                classification |= TransactionClass.CrcOrganisationSignup;
-            }
-
-            if (isCrcHubTransfer)
-            {
-                classification |= TransactionClass.CrcHubTransfer;
-            }
-
-            if (isCrcTrust)
-            {
-                classification |= TransactionClass.CrcTrust;
-            }
-
-            if (isSafeEthTransfer)
-            {
-                classification |= TransactionClass.SafeEthTransfer;
-            }
-
-            if (isSafeEthTransfer)
-            {
-                classification |= TransactionClass.SafeEthTransfer;
-            }
-
-            if (isEoaEthTransfer)
-            {
-                classification |= TransactionClass.EoaEthTransfer;
-            }
-
-            return classification;
         }
     }
 }

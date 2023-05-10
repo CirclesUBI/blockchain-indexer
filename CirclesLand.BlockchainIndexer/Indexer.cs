@@ -333,59 +333,51 @@ namespace CirclesLand.BlockchainIndexer
             // Classify all transactions
             await source.Select(transactionAndReceipt =>
                 {
-                    var classification = TransactionClass.Unknown;
-                    try
+                    var classification = transactionAndReceipt.Receipt == null
+                        ? TransactionClass.Unknown
+                        : TransactionClassifier.Classify(
+                            transactionAndReceipt.Transaction,
+                            transactionAndReceipt.Receipt,
+                            null);
+
+                    if (classification.HasFlag(TransactionClass.CrcSignup))
                     {
-                        classification = transactionAndReceipt.Receipt == null
-                            ? TransactionClass.Unknown
-                            : TransactionClassifier.Classify(
-                                transactionAndReceipt.Transaction,
-                                transactionAndReceipt.Receipt,
-                                null);
+                        EventsTotal.WithLabels("crc_signup").Inc();
+                    }
 
-                        if (classification.HasFlag(TransactionClass.CrcSignup))
-                        {
-                            EventsTotal.WithLabels("crc_signup").Inc();
-                        }
-
-                        if (classification.HasFlag(TransactionClass.CrcTrust))
-                        {
-                            EventsTotal.WithLabels("crc_trust").Inc();
-                        }
-
-                        if (classification.HasFlag(TransactionClass.Erc20Transfer))
-                        {
-                            EventsTotal.WithLabels("erc20_transfer").Inc();
-                        }
-
-                        if (classification.HasFlag(TransactionClass.CrcHubTransfer))
-                        {
-                            EventsTotal.WithLabels("crc_hub_transfer").Inc();
-                        }
-
-                        if (classification.HasFlag(TransactionClass.CrcOrganisationSignup))
-                        {
-                            EventsTotal.WithLabels("crc_organization_signup").Inc();
-                        }
-
-                        if (classification.HasFlag(TransactionClass.EoaEthTransfer))
-                        {
-                            EventsTotal.WithLabels("eoa_eth_transfer").Inc();
-                        }
-
-                        if (classification.HasFlag(TransactionClass.SafeEthTransfer))
-                        {
-                            EventsTotal.WithLabels("safe_eth_transfer").Inc();
-                        }
-
-                        if (classification.HasFlag(TransactionClass.Unknown))
-                        {
-                            EventsTotal.WithLabels("other").Inc();
-                        }
-                    } catch (Exception e)
+                    if (classification.HasFlag(TransactionClass.CrcTrust))
                     {
-                        Console.WriteLine($"Error while classifying transaction {transactionAndReceipt.Transaction.TransactionHash}: {e}");
-                        Console.WriteLine($"Importing transaction {transactionAndReceipt.Transaction.TransactionHash} without classification.");
+                        EventsTotal.WithLabels("crc_trust").Inc();
+                    }
+
+                    if (classification.HasFlag(TransactionClass.Erc20Transfer))
+                    {
+                        EventsTotal.WithLabels("erc20_transfer").Inc();
+                    }
+
+                    if (classification.HasFlag(TransactionClass.CrcHubTransfer))
+                    {
+                        EventsTotal.WithLabels("crc_hub_transfer").Inc();
+                    }
+
+                    if (classification.HasFlag(TransactionClass.CrcOrganisationSignup))
+                    {
+                        EventsTotal.WithLabels("crc_organization_signup").Inc();
+                    }
+
+                    if (classification.HasFlag(TransactionClass.EoaEthTransfer))
+                    {
+                        EventsTotal.WithLabels("eoa_eth_transfer").Inc();
+                    }
+
+                    if (classification.HasFlag(TransactionClass.SafeEthTransfer))
+                    {
+                        EventsTotal.WithLabels("safe_eth_transfer").Inc();
+                    }
+
+                    if (classification.HasFlag(TransactionClass.Unknown))
+                    {
+                        EventsTotal.WithLabels("other").Inc();
                     }
 
                     return (
