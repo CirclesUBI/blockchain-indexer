@@ -4,10 +4,10 @@ namespace CirclesLand.BlockchainIndexer.Server
     {
         public static async Task Main(string[] args)
         {
-            if (Settings.DelayStartup > 0)
+            if (SettingsValues.DelayStartup > 0)
             {
-                Console.WriteLine($"Start is delayed for {Settings.DelayStartup} seconds.");
-                await Task.Delay(Settings.DelayStartup * 1000);
+                Console.WriteLine($"Start is delayed for {SettingsValues.DelayStartup} seconds.");
+                await Task.Delay(SettingsValues.DelayStartup * 1000);
             }
             
             // This is O.K. because all dates are UTC
@@ -16,7 +16,7 @@ namespace CirclesLand.BlockchainIndexer.Server
             using var host = Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    webBuilder.UseUrls(Settings.WebsocketServerUrl);
+                    webBuilder.UseUrls(SettingsValues.WebsocketServerUrl);
                     webBuilder.UseStartup<Startup>();
                 })
                 .Build();
