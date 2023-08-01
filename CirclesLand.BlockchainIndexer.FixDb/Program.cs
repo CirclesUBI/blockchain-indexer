@@ -49,8 +49,9 @@ order by gap_start;";
         var connectionString = (string)parsedArgs["c"];
         var rpcUrl = (string)parsedArgs["r"];
         var fix = parsedArgs.TryGetValue("f", out var f) && f is "true";
+        var sslMode = parsedArgs.TryGetValue("s", out var s) && s is "true" ? SslMode.Require : SslMode.Prefer;
 
-        var gaps = CheckForGaps(connectionString);
+        var gaps = CheckForGaps(connectionString, sslMode, true);
         var blocks = DownloadBlocks(rpcUrl, gaps);
         var transactionsWithReceipt = DownloadReceipts(blocks, rpcUrl);
         var transactionsWithEvents = ExtractEvents(transactionsWithReceipt);
@@ -62,12 +63,12 @@ order by gap_start;";
             return;
         }
         
-        await InsertMissingData(connectionString, transactionsWithEvents);
+        await InsertMissingData(connectionString, sslMode, true, transactionsWithEvents);
     }
 
-    private static async Task InsertMissingData(string connectionString, IEnumerable<TransactionWithEvents> transactionsWithEvents)
+    private static async Task InsertMissingData(string connectionString, SslMode sslMode, bool trustServerCertificate, IEnumerable<TransactionWithEvents> transactionsWithEvents)
     {
-        var pgsqlConnection = new NpgsqlConnection(ConvertDatabaseUrlToConnectionString(connectionString));
+        var pgsqlConnection = new NpgsqlConnection(ConvertDatabaseUrlToConnectionString(connectionString, SslMode.Prefer, true));
         await pgsqlConnection.OpenAsync();
 
         long lastBlockNo = -1;
@@ -120,7 +121,7 @@ order by gap_start;";
                 , TransactionClass.Unknown
                 , events.ToArray());
 
-            await TransactionsWriter.WriteTransactions(ConvertDatabaseUrlToConnectionString(connectionString), 
+            await TransactionsWriter.WriteTransactions(ConvertDatabaseUrlToConnectionString(connectionString, sslMode, trustServerCertificate), 
                 new List<(
                     int TotalTransactionsInBlock,
                     string TxHash,
@@ -442,7 +443,7 @@ order by gap_start;";
         Console.WriteLine();
     }
 
-    private static string ConvertDatabaseUrlToConnectionString(string databaseUrl)
+    private static string ConvertDatabaseUrlToConnectionString(string databaseUrl, SslMode sslMode, bool trustServerCertificate)
     {
         var databaseUri = new Uri(databaseUrl);
         var userInfo = databaseUri.UserInfo.Split(':');
@@ -454,15 +455,15 @@ order by gap_start;";
             Database = databaseUri.LocalPath.TrimStart('/'),
             Username = userInfo[0],
             Password = userInfo[1],
-            SslMode = SslMode.Require,
-            TrustServerCertificate = true
+            SslMode = sslMode,
+            TrustServerCertificate = trustServerCertificate
         }.ToString();
     }
 
-    private static IEnumerable<Gap> CheckForGaps(string connectionString)
+    private static IEnumerable<Gap> CheckForGaps(string connectionString, SslMode sslMode, bool trustServerCertificate)
     {
         Console.WriteLine($"Checking for gaps");
-        using var pgsqlConnection = new NpgsqlConnection(ConvertDatabaseUrlToConnectionString(connectionString));
+        using var pgsqlConnection = new NpgsqlConnection(ConvertDatabaseUrlToConnectionString(connectionString, sslMode, trustServerCertificate));
         pgsqlConnection.Open();
 
         using var cmd = new NpgsqlCommand(GapQuery, pgsqlConnection);
@@ -484,6 +485,7 @@ order by gap_start;";
     /// -c connection string (string)
     /// -r rpc url (string)
     /// -f fix (true|false)
+    /// -s database ssl (true|false)
     /// </summary>
     static Dictionary<string, object> ParseArgs(string[] args)
     {
@@ -512,6 +514,11 @@ order by gap_start;";
         if (parsedArgs.TryGetValue("f", out var fix) && fix is not "true" and not "false")
         {
             throw new Exception("Invalid fix argument (-f). Allowed values: true, false");
+        }
+
+        if (parsedArgs.TryGetValue("s", out var ssl) && ssl is not "true" and not "false")
+        {
+            throw new Exception("Invalid ssl argument (-s). Allowed values: true, false");
         }
 
         return parsedArgs;
