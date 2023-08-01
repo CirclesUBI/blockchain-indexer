@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net7.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <Reference Include="Microsoft.Extensions.Logging.Abstractions">
+        <HintPath>..\..\..\..\.nuget\packages\microsoft.extensions.logging.abstractions\7.0.0\lib\net7.0\Microsoft.Extensions.Logging.Abstractions.dll</HintPath>
+      </Reference>
+      <Reference Include="Nethereum.Contracts">
+        <HintPath>..\..\..\..\.nuget\packages\nethereum.contracts\4.13.0\lib\net5.0\Nethereum.Contracts.dll</HintPath>
+      </Reference>
+      <Reference Include="Nethereum.Hex">
+        <HintPath>..\..\..\..\.nuget\packages\nethereum.hex\4.13.0\lib\net5.0\Nethereum.Hex.dll</HintPath>
+      </Reference>
+      <Reference Include="Nethereum.RPC">
+        <HintPath>..\..\..\..\.nuget\packages\nethereum.rpc\4.13.0\lib\net5.0\Nethereum.RPC.dll</HintPath>
+      </Reference>
+      <Reference Include="Nethereum.Web3">
+        <HintPath>..\..\..\..\.nuget\packages\nethereum.web3\4.13.0\lib\net5.0\Nethereum.Web3.dll</HintPath>
+      </Reference>
+      <Reference Include="Npgsql">
+        <HintPath>..\..\..\..\.nuget\packages\npgsql\7.0.2\lib\net7.0\Npgsql.dll</HintPath>
+      </Reference>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\CirclesLand.BlockchainIndexer\CirclesLand.BlockchainIndexer.csproj" />
+    </ItemGroup>
+
+</Project>
