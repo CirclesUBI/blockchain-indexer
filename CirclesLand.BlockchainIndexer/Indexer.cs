@@ -109,7 +109,7 @@ namespace CirclesLand.BlockchainIndexer
                 else
                 {
                     roundContext.Log($" Importing from staging tables ..");
-                    ImportProcedure.ImportFromStaging(roundContext.Connection, Settings.BulkFlushTimeoutInSeconds);
+                    ImportProcedure.ImportFromStaging(roundContext.Connection, SettingsValues.BulkFlushTimeoutInSeconds);
                 }
 
                 roundContext.Log($"Finding the last persisted block ..");
@@ -143,8 +143,8 @@ namespace CirclesLand.BlockchainIndexer
                 var combinedSource1 = Source.Combine(reorgSource, source, i => new Merge<HexBigInteger>(i));
 
                 var flushEveryNthBatch = Mode == IndexerMode.CatchUp
-                    ? Settings.BulkFlushInterval
-                    : Settings.SerialFlushInterval;
+                    ? SettingsValues.BulkFlushInterval
+                    : SettingsValues.SerialFlushInterval;
 
                 Source<(int TotalTransactionsInBlock, HexBigInteger Timestamp, Transaction Transaction,
                     TransactionReceipt Receipt), NotUsed>? activeSource = TransactionAndReceiptSource(
@@ -207,7 +207,7 @@ namespace CirclesLand.BlockchainIndexer
                     return o;
                 })
                 // Get the full block with all transactions
-                .SelectAsync(Settings.MaxParallelBlockDownloads, currentBlockNo =>
+                .SelectAsync(SettingsValues.MaxParallelBlockDownloads, currentBlockNo =>
                 {
                     BlocksTotal.WithLabels("download_started").Inc();
 
@@ -215,7 +215,7 @@ namespace CirclesLand.BlockchainIndexer
                         .GetBlockWithTransactionsByNumber
                         .SendRequestAsync(currentBlockNo);
                 })
-                .Buffer(Mode == IndexerMode.CatchUp ? Settings.MaxDownloadedBlockBufferSize : 1,
+                .Buffer(Mode == IndexerMode.CatchUp ? SettingsValues.MaxDownloadedBlockBufferSize : 1,
                     OverflowStrategy.Backpressure)
                 // Bundle the every transaction in a block with the block timestamp and send it downstream
                 .SelectMany(block =>
@@ -246,10 +246,10 @@ namespace CirclesLand.BlockchainIndexer
 
                     return transactions;
                 })
-                .Buffer(Mode == IndexerMode.CatchUp ? Settings.MaxDownloadedTransactionsBufferSize : 1,
+                .Buffer(Mode == IndexerMode.CatchUp ? SettingsValues.MaxDownloadedTransactionsBufferSize : 1,
                     OverflowStrategy.Backpressure)
                 // Add the receipts for every transaction
-                .SelectAsync(Settings.MaxParallelReceiptDownloads, async timestampAndTransaction =>
+                .SelectAsync(SettingsValues.MaxParallelReceiptDownloads, async timestampAndTransaction =>
                 {
                     ReceiptsTotal.WithLabels("download_started").Inc();
 
@@ -266,7 +266,7 @@ namespace CirclesLand.BlockchainIndexer
                         Receipt: receipt
                     );
                 })
-                .Buffer(Mode == IndexerMode.CatchUp ? Settings.MaxDownloadedReceiptsBufferSize : 1,
+                .Buffer(Mode == IndexerMode.CatchUp ? SettingsValues.MaxDownloadedReceiptsBufferSize : 1,
                     OverflowStrategy.Backpressure);
         }
 
@@ -280,7 +280,7 @@ namespace CirclesLand.BlockchainIndexer
             Console.WriteLine($"Processing reorg starting at {lastReorgBlock} ...");
             Console.ForegroundColor = color;
 
-            using var connection = new NpgsqlConnection(Settings.ConnectionString);
+            using var connection = new NpgsqlConnection(SettingsValues.ConnectionString);
             connection.Open();
 
             Console.ForegroundColor = ConsoleColor.Magenta;
@@ -448,11 +448,11 @@ namespace CirclesLand.BlockchainIndexer
                         Details: extractedDetails
                     );
                 })
-                .Buffer(Mode == IndexerMode.CatchUp ? Settings.MaxWriteToStagingBatchBufferSize : 10,
+                .Buffer(Mode == IndexerMode.CatchUp ? SettingsValues.MaxWriteToStagingBatchBufferSize : 10,
                     OverflowStrategy.Backpressure)
-                .GroupedWithin(Settings.WriteToStagingBatchSize,
+                .GroupedWithin(SettingsValues.WriteToStagingBatchSize,
                     TimeSpan.FromMilliseconds(Mode == IndexerMode.CatchUp
-                        ? Settings.WriteToStagingBatchMaxIntervalInSeconds * 1000
+                        ? SettingsValues.WriteToStagingBatchMaxIntervalInSeconds * 1000
                         : 500))
                 .RunForeach(transactionsWithExtractedDetails =>
                 {
@@ -462,7 +462,7 @@ namespace CirclesLand.BlockchainIndexer
 
                     var txArr = transactionsWithExtractedDetails.ToArray();
                     var p = TransactionsWriter.WriteTransactions(
-                        Settings.ConnectionString,
+                        SettingsValues.ConnectionString,
                         txArr);
 
                     p.Wait();
@@ -480,7 +480,7 @@ namespace CirclesLand.BlockchainIndexer
         {
             var delta = currentBlock.Value - lastPersistedBlock;
             Source<HexBigInteger, NotUsed> source;
-            if (delta > Settings.UseBulkSourceThreshold)
+            if (delta > SettingsValues.UseBulkSourceThreshold)
             {
                 roundContext.Log($"Found {delta} blocks to catch up. Using the 'BulkSource'.");
                 Mode = IndexerMode.CatchUp;
@@ -491,7 +491,7 @@ namespace CirclesLand.BlockchainIndexer
             }
             else
             {
-                if (string.IsNullOrWhiteSpace(Settings.RpcWsEndpointUrl) || Settings.RpcWsEndpointUrl == "null")
+                if (string.IsNullOrWhiteSpace(SettingsValues.RpcWsEndpointUrl) || SettingsValues.RpcWsEndpointUrl == "null")
                 {
                     roundContext.Log($"Found {delta} blocks to catch up. Using the 'Polling' source.");
                     Mode = IndexerMode.Polling;
@@ -519,8 +519,8 @@ namespace CirclesLand.BlockchainIndexer
                 roundContext.Log($" Importing from staging tables ..");
                 ImportProcedure.ImportFromStaging(roundContext.Connection
                     , Mode == IndexerMode.CatchUp
-                        ? Settings.BulkFlushTimeoutInSeconds
-                        : Settings.SerialFlushTimeoutInSeconds);
+                        ? SettingsValues.BulkFlushTimeoutInSeconds
+                        : SettingsValues.SerialFlushTimeoutInSeconds);
 
                 roundContext.Log(" Cleaning staging tables ..");
                 writtenTransactions = StagingTables.CleanImported(roundContext.Connection);

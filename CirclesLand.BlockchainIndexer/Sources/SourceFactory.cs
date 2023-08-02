@@ -14,18 +14,18 @@ namespace CirclesLand.BlockchainIndexer.Sources
 
         public Source<HexBigInteger, NotUsed> CreatePollingSource()
         {
-            return IntervalSource.Create(Settings.PollingIntervalInMs, Settings.ConnectionString,
-                Settings.RpcEndpointUrl);
+            return IntervalSource.Create(SettingsValues.PollingIntervalInMs, SettingsValues.ConnectionString,
+                SettingsValues.RpcEndpointUrl);
         }
 
         public async Task<Source<HexBigInteger,NotUsed>> CreateLiveSource(long lastPersistedBlock)
         {
-            return await LiveSource.Create(Settings.ConnectionString, Settings.RpcEndpointUrl, lastPersistedBlock);
+            return await LiveSource.Create(SettingsValues.ConnectionString, SettingsValues.RpcEndpointUrl, lastPersistedBlock);
         }
 
         public Source<HexBigInteger,NotUsed> CreateReorgSource()
         {
-            return ReorgSource.Create(60000, Settings.ConnectionString, Settings.RpcEndpointUrl);
+            return ReorgSource.Create(60000, SettingsValues.ConnectionString, SettingsValues.RpcEndpointUrl);
         }
     }
 }

@@ -53,7 +53,7 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
 
             writerConnection.Execute($@"
-                                    insert into _block_staging (number, hash, timestamp, total_transaction_count)
+                                    insert into {TransactionsWriter.blockTableName} (number, hash, timestamp, total_transaction_count)
                                     values (@number, @hash, @timestamp, 0);",
                 new
                 {

@@ -54,7 +54,7 @@ namespace CirclesLand.BlockchainIndexer
 
         public long GetLastValidBlock()
         {
-            return BlockTracker.GetLastValidBlock(Connection, Settings.StartFromBlock);
+            return BlockTracker.GetLastValidBlock(Connection, SettingsValues.StartFromBlock);
         }
 
         public void OnError(Exception exception)
@@ -89,7 +89,7 @@ namespace CirclesLand.BlockchainIndexer
 
         public async Task<HexBigInteger> Start(long lastPersistedBlock)
         {
-            var tmpWeb3 = new Web3(Settings.RpcEndpointUrl);
+            var tmpWeb3 = new Web3(SettingsValues.RpcEndpointUrl);
             var currentBlock = await tmpWeb3
                 .Eth
                 .Blocks
@@ -108,19 +108,19 @@ namespace CirclesLand.BlockchainIndexer
             var catchUpMostLikelyCompleted = 
                 RoundNo > 1 
                 && Statistics.TotalErrorCount < RoundNo
-                && delta < Settings.UseBulkSourceThreshold;
+                && delta < SettingsValues.UseBulkSourceThreshold;
             
             if (!catchUpMostLikelyCompleted 
-                || String.IsNullOrEmpty(Settings.RpcWsEndpointUrl) 
-                || Settings.RpcWsEndpointUrl == "null")
+                || String.IsNullOrEmpty(SettingsValues.RpcWsEndpointUrl) 
+                || SettingsValues.RpcWsEndpointUrl == "null")
             {
                 Logger.Log("Using the http connection for the next round.");
-                Web3 = new Web3(Settings.RpcEndpointUrl); 
+                Web3 = new Web3(SettingsValues.RpcEndpointUrl); 
             }
             else
             {
                 Logger.Log("Using the websocket connection for the next round.");
-                var client = new WebSocketClient(Settings.RpcWsEndpointUrl);
+                var client = new WebSocketClient(SettingsValues.RpcWsEndpointUrl);
                 Web3 = new Web3(client);
             }
 
