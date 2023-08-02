@@ -46,9 +46,8 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 });
         }
 
-        public static void InsertEmptyBlock(NpgsqlConnection writerConnection, BlockWithTransactions block)
+        public static void InsertEmptyBlock(NpgsqlConnection writerConnection, long blockTimestamp, long blockNumber, string blockHash)
         {
-            var blockTimestamp = block.Timestamp.ToLong();
             var blockTimestampDateTime =
                 DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
 
@@ -57,8 +56,8 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                                     values (@number, @hash, @timestamp, 0);",
                 new
                 {
-                    number = block.Number.ToLong(),
-                    hash = block.BlockHash,
+                    number = blockNumber,
+                    hash = blockHash,
                     timestamp = blockTimestampDateTime
                 });
 

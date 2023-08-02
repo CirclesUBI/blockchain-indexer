@@ -227,7 +227,7 @@ namespace CirclesLand.BlockchainIndexer
 
                     if (t.Length == 0)
                     {
-                        BlockTracker.InsertEmptyBlock(roundContext.Connection, block);
+                        BlockTracker.InsertEmptyBlock(roundContext.Connection, block.Timestamp.ToLong(), block.Number.ToLong(), block.BlockHash);
                         if (Mode == IndexerMode.Live || Mode == IndexerMode.Polling)
                         {
                             CompleteBatch(flushEveryNthBatch, roundContext, false,

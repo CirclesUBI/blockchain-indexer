@@ -12,7 +12,7 @@ namespace CirclesLand.BlockchainIndexer.FixDb;
 
 record Gap(long Start, long End, long Size);
 
-record TransactionWithReceipt(BlockWithTransactions Block, Transaction Transaction, TransactionReceipt Receipt);
+record TransactionWithReceipt(BlockWithTransactions Block, Transaction Transaction, TransactionReceipt? Receipt);
 
 record TransactionWithEvents(TransactionWithReceipt TransactionWithReceipts, IList<(TransactionClass, IDetail?, Exception?)> Events);
 
@@ -102,23 +102,21 @@ order by gap_start;";
             
             var blockNumber = transaction.BlockNumber.ToLong();
             var block = transactionWithEvents.TransactionWithReceipts.Block;
-            var blockTimestamp = block.Timestamp.ToLong();
-            var blockTimestampDateTime =
-                DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
             
             if (blockNumber > lastBlockNo)
             {
-                InsertBlock(pgsqlConnection, block, blockTimestampDateTime, transaction);
+                AddRequestedBlock(pgsqlConnection, block);
                 lastBlockNo = blockNumber;
             }
             
+            var classification = Classify(transactionWithEvents);
             var transactionWithExtractedDetails = (
                 block.Transactions.Length
                 , transaction.TransactionHash
                 , block.Timestamp
                 , transaction
                 , receipt
-                , TransactionClass.Unknown
+                , classification
                 , events.ToArray());
 
             await TransactionsWriter.WriteTransactions(ConvertDatabaseUrlToConnectionString(connectionString, sslMode, trustServerCertificate), 
@@ -164,6 +162,40 @@ order by gap_start;";
         await pgsqlConnection.CloseAsync();
     }
 
+    private static TransactionClass Classify(TransactionWithEvents transactionWithEvents)
+    {
+        var classification = TransactionClass.Unknown;
+        foreach (var loggedEvent in transactionWithEvents.Events)
+        {
+            switch (loggedEvent.Item1)
+            {
+                case TransactionClass.Erc20Transfer:
+                    classification |= TransactionClass.Erc20Transfer;
+                    break;
+                case TransactionClass.CrcSignup:
+                    classification |= TransactionClass.CrcSignup;
+                    break;
+                case TransactionClass.CrcTrust:
+                    classification |= TransactionClass.CrcTrust;
+                    break;
+                case TransactionClass.CrcOrganisationSignup:
+                    classification |= TransactionClass.CrcOrganisationSignup;
+                    break;
+                case TransactionClass.CrcHubTransfer:
+                    classification |= TransactionClass.CrcHubTransfer;
+                    break;
+                case TransactionClass.SafeEthTransfer:
+                    classification |= TransactionClass.SafeEthTransfer;
+                    break;
+                case TransactionClass.EoaEthTransfer:
+                    classification |= TransactionClass.EoaEthTransfer;
+                    break;
+            }
+        }
+
+        return classification;
+    }
+
     private static void LogException(Exception exception, int initialLevel = 0)
     {
         var level = initialLevel;
@@ -179,23 +211,16 @@ order by gap_start;";
         }
     }
 
-    private static void InsertBlock(NpgsqlConnection pgsqlConnection, BlockWithTransactions block,
-        DateTime blockTimestampDateTime, Transaction transaction)
+    private static void AddRequestedBlock(NpgsqlConnection pgsqlConnection, BlockWithTransactions block)
     {
         BlockTracker.AddRequested(pgsqlConnection, block.Number.ToLong());
 
-        if (block.Transactions.Length == 0)
+        if (block.Transactions.Length != 0)
         {
-            BlockTracker.InsertEmptyBlock(pgsqlConnection, block);
+            return;
         }
-        else
-        {
-            BlockWriter.WriteBlocks(pgsqlConnection, TransactionsWriter.blockTableName,
-                new List<(long BlockNumber, DateTime BlockTimestamp, string Hash, int TotalTransactionCount)>
-                {
-                    (block.Number.ToLong(), blockTimestampDateTime, transaction.BlockHash, block.Transactions.Length)
-                });
-        }
+        
+        BlockTracker.InsertEmptyBlock(pgsqlConnection, block.Timestamp.ToLong(), block.Number.ToLong(), block.BlockHash);
     }
 
     private static async Task Materialize(IEnumerable<TransactionWithEvents> transactionsWithEvents, Func<TransactionWithEvents, Task> action)
@@ -214,18 +239,25 @@ order by gap_start;";
             var receipt = transactionWithReceipt.Receipt;
             var events = new List<(TransactionClass, IDetail?, Exception?)>();
 
-            foreach (var log in receipt.Logs)
+            if (receipt != null)
             {
-                ExtractCrcTrust(log, events);
-                ExtractCrcSignup(receipt, events);
-                ExtractCrcHubTransfer(receipt, events);
-                ExtractCrcOrganisationSignup(log, events);
-                ExtractErc20Transfer(log, events);
+                foreach (var log in receipt.Logs)
+                {
+                    ExtractCrcTrust(log, events);
+                    ExtractCrcSignup(receipt, events);
+                    ExtractCrcHubTransfer(receipt, events);
+                    ExtractCrcOrganisationSignup(log, events);
+                    ExtractErc20Transfer(log, events);
+                }
+
+                ExtractEoaEthTransfer(transaction, receipt, events);
+                ExtractSafeEthTransfer(transaction, receipt, events);
+            }
+            else
+            {
+                Console.WriteLine($"  Warning: Receipt for transaction {transaction.TransactionHash} not found");
             }
 
-            ExtractEoaEthTransfer(transaction, receipt, events);
-            ExtractSafeEthTransfer(transaction, receipt, events);
-            
             yield return new TransactionWithEvents(transactionWithReceipt, events);
         }
     }
@@ -397,7 +429,15 @@ order by gap_start;";
 
             foreach (var transaction in block.Transactions)
             {
-                yield return new TransactionWithReceipt(block, transaction, receipts[transaction.TransactionHash]);
+                if (!receipts.TryGetValue(transaction.TransactionHash, out var receipt))
+                {
+                    Console.WriteLine($"  Warning: Receipt for transaction {transaction.TransactionHash} not found");
+                    yield return new TransactionWithReceipt(block, transaction, null);
+                }
+                else
+                {
+                    yield return new TransactionWithReceipt(block, transaction, receipt);
+                }
             }
         }
     }
@@ -411,6 +451,11 @@ order by gap_start;";
         {
             Console.WriteLine($"* Downloading receipt for transaction {transaction.TransactionHash}...");
             var receipt = web3.Eth.Transactions.GetTransactionReceipt.SendRequestAsync(transaction.TransactionHash).Result;
+            if (receipt == null)
+            {
+                Console.WriteLine($"  Warning: Receipt for transaction {transaction.TransactionHash} not found");
+                continue;
+            }
             
             yield return receipt;
         }

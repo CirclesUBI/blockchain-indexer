@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CirclesLand.BlockchainIndex
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CirclesLand.BlockchainIndexer.FixDb", "CirclesLand.BlockchainIndexer.FixDb\CirclesLand.BlockchainIndexer.FixDb.csproj", "{F876198B-8DD9-4F16-8CEC-69E53194937E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CirclesLand.BlockchainIndexer.NethermindPlugin", "CirclesLand.BlockchainIndexer.NethermindPlugin\CirclesLand.BlockchainIndexer.NethermindPlugin.csproj", "{CC17033F-EB60-42E7-92FB-72767F6BBD82}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,5 +57,9 @@ Global
 		{F876198B-8DD9-4F16-8CEC-69E53194937E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F876198B-8DD9-4F16-8CEC-69E53194937E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F876198B-8DD9-4F16-8CEC-69E53194937E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CC17033F-EB60-42E7-92FB-72767F6BBD82}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CC17033F-EB60-42E7-92FB-72767F6BBD82}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CC17033F-EB60-42E7-92FB-72767F6BBD82}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CC17033F-EB60-42E7-92FB-72767F6BBD82}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
