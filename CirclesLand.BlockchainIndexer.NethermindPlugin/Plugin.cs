@@ -1,22 +1,19 @@
 using CirclesLand.BlockchainIndexer.Persistence;
 using CirclesLand.BlockchainIndexer.TransactionDetailModels;
-using Nethereum.Hex.HexTypes;
-using Nethereum.RPC.Eth.DTOs;
 using Nethermind.Api;
 using Nethermind.Api.Extensions;
 using Nethermind.Core;
 using Nethermind.Core.Crypto;
-using Nethermind.Core.Extensions;
+using Nethermind.Crypto;
+using Nethermind.Logging;
 using Npgsql;
-using Block = Nethermind.Core.Block;
-using Transaction = Nethermind.Core.Transaction;
 
 namespace CirclesLand.BlockchainIndexer.NethermindPlugin;
 
-record TransactionWithReceipt(Block Block, Transaction Transaction, TxReceipt? Receipt);
+public record TransactionWithReceipt(Block Block, Transaction Transaction, TxReceipt? Receipt);
 
-record TransactionWithEvents(TransactionWithReceipt TransactionWithReceipts,
-    IList<(TransactionClass, IDetail?, Exception?)> Events);
+public record TransactionWithEvents(TransactionWithReceipt TransactionWithReceipts, 
+    IList<(TransactionClass EventClassification, IDetail? Detail, Exception? Exception)> Events, TransactionClass TransactionClassification);
 
 public class Plugin : INethermindPlugin
 {
@@ -27,9 +24,11 @@ public class Plugin : INethermindPlugin
     public async Task Init(INethermindApi nethermindApi)
     {
         long from = 0;
+        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
         Task.Run(async () =>
         {
+            EthereumEcdsa ecdsa = new(nethermindApi.ChainSpec.ChainId, LimboLogs.Instance);
             while (true)
             {
                 long? to = nethermindApi.BlockTree?.Head?.Number;
@@ -45,9 +44,12 @@ public class Plugin : INethermindPlugin
 
                 IEnumerable<Block> blocks = DownloadBlocks(nethermindApi, from, to.Value);
                 IEnumerable<TransactionWithReceipt> transactionsWithReceipt = DownloadReceipts(nethermindApi, blocks);
+                
+                
+                
                 IEnumerable<TransactionWithEvents> transactionsWithEvents = ExtractEvents(transactionsWithReceipt);
 
-                await Insert(connectionString, sslMode, true, transactionsWithEvents);
+                await Insert(connectionString, sslMode, true, transactionsWithEvents, ecdsa);
 
                 from = to.Value;
 
@@ -152,12 +154,19 @@ public class Plugin : INethermindPlugin
                 Console.WriteLine($"  Warning: Receipt for transaction {transaction.Hash} not found");
             }
 
-            yield return new TransactionWithEvents(transactionWithReceipt, events);
+            TransactionClass txClass = TransactionClass.Unknown;
+            foreach (var (eventClassification, _, _) in events)
+            {
+                txClass |= eventClassification;
+            }
+
+            yield return new TransactionWithEvents(transactionWithReceipt, events, txClass);
         }
     }
 
     private async Task Insert(string connectionString, SslMode sslMode, bool trustServerCertificate,
-        IEnumerable<TransactionWithEvents> transactionsWithEvents)
+        IEnumerable<TransactionWithEvents> transactionsWithEvents,
+        EthereumEcdsa ecdsa)
     {
         var pgsqlConnection =
             new NpgsqlConnection(ConvertDatabaseUrlToConnectionString(connectionString, SslMode.Prefer, true));
@@ -168,11 +177,14 @@ public class Plugin : INethermindPlugin
         await Materialize(transactionsWithEvents, async transactionWithEvents =>
         {
             var transaction = transactionWithEvents.TransactionWithReceipts.Transaction;
-            var receipt = transactionWithEvents.TransactionWithReceipts.Receipt;
+            Console.WriteLine($"Indexing transaction {transaction.Hash}...");
+
+            // var receipt = transactionWithEvents.TransactionWithReceipts.Receipt;
             var events = transactionWithEvents.Events
                 .Where(o => o.Item2 != null)
                 .Select(o => o.Item2)
-                .Cast<IDetail>();
+                .Cast<IDetail>()
+                .ToArray();
 
             var errors = transactionWithEvents.Events
                 .Where(o => o.Item3 != null)
@@ -197,68 +209,47 @@ public class Plugin : INethermindPlugin
 
             if (blockNumber > lastBlockNo)
             {
-                AddRequestedBlock(pgsqlConnection, block);
+                Console.WriteLine($"AddRequestedBlock({blockNumber})");
+                AddRequestedBlock(pgsqlConnection, block, events);
                 lastBlockNo = blockNumber;
             }
 
-            var classification = Classify(transactionWithEvents);
-            var transactionWithExtractedDetails = (
-                block.Transactions.Length
-                , transaction.Hash!.ToString()
-                , block.Timestamp.ToHexBigInteger()
-                , new Nethereum.RPC.Eth.DTOs.Transaction
-                {
-                    From = transaction.SenderAddress.ToString(false),
-                    To = transaction.To.ToString(false),
-                    Value = new HexBigInteger(transaction.Value.ToHexString(false)),
-                    BlockHash = block.Hash.ToString(),
-                    TransactionHash = transaction.Hash.ToString(),
-                    TransactionIndex = transaction.PoolIndex.ToHexBigInteger()
-                }
-                , default(TransactionReceipt?)
-                , classification
-                , events.ToArray());
+            if (transaction.To == null)
+            {
+                Console.WriteLine($"Encountered a contract creation transaction {transaction.Hash}. Skipping ..");
+                return;
+            }
 
             await TransactionsWriter.WriteTransactions(
-                ConvertDatabaseUrlToConnectionString(connectionString, sslMode, trustServerCertificate),
-                new List<(
-                    int TotalTransactionsInBlock,
-                    string TxHash,
-                    HexBigInteger Timestamp,
-                    Nethereum.RPC.Eth.DTOs.Transaction Transaction,
-                    TransactionReceipt? Receipt,
-                    TransactionClass Classification,
-                    IDetail[] Details)>
+                ConvertDatabaseUrlToConnectionString(connectionString, sslMode, trustServerCertificate), new [] {transactionWithEvents});
+
+            // Retry the following 3 times
+            var triesLeft = 3;
+            while (triesLeft-- > 0)
+            {
+                try
                 {
-                    transactionWithExtractedDetails
-                });
+                    Console.WriteLine("Importing from staging...");
+                    ImportProcedure.ImportFromStaging(pgsqlConnection, 10);
+                    Persistence.StagingTables.CleanImported(pgsqlConnection);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    if (triesLeft > 0)
+                    {
+                        Console.WriteLine($"Error: {ex.Message}. Retrying...");
+                        LogException(ex);
+
+                        await Task.Delay(1000);
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
+            }
         });
-
-        // Retry the following 3 times
-        var triesLeft = 3;
-        while (triesLeft-- > 0)
-        {
-            try
-            {
-                Console.WriteLine("Importing from staging...");
-                ImportProcedure.ImportFromStaging(pgsqlConnection, 10);
-                break;
-            }
-            catch (Exception ex)
-            {
-                if (triesLeft > 0)
-                {
-                    Console.WriteLine($"Error: {ex.Message}. Retrying...");
-                    LogException(ex);
-
-                    await Task.Delay(1000);
-                }
-                else
-                {
-                    throw;
-                }
-            }
-        }
 
         await pgsqlConnection.CloseAsync();
     }
@@ -268,15 +259,22 @@ public class Plugin : INethermindPlugin
     {
         foreach (var transactionsWithEvent in transactionsWithEvents)
         {
-            await action(transactionsWithEvent);
+            try
+            {
+                await action(transactionsWithEvent);
+            }
+            catch (Exception e)
+            {
+                LogException(e);
+            }
         }
     }
 
-    private static void AddRequestedBlock(NpgsqlConnection pgsqlConnection, Block block)
+    private static void AddRequestedBlock(NpgsqlConnection pgsqlConnection, Block block, IDetail[] events)
     {
         BlockTracker.AddRequested(pgsqlConnection, block.Number);
 
-        if (block.Transactions.Length != 0)
+        if (events.Length != 0)
         {
             return;
         }
@@ -315,40 +313,6 @@ public class Plugin : INethermindPlugin
             SslMode = sslMode,
             TrustServerCertificate = trustServerCertificate
         }.ToString();
-    }
-
-    private static TransactionClass Classify(TransactionWithEvents transactionWithEvents)
-    {
-        var classification = TransactionClass.Unknown;
-        foreach (var loggedEvent in transactionWithEvents.Events)
-        {
-            switch (loggedEvent.Item1)
-            {
-                case TransactionClass.Erc20Transfer:
-                    classification |= TransactionClass.Erc20Transfer;
-                    break;
-                case TransactionClass.CrcSignup:
-                    classification |= TransactionClass.CrcSignup;
-                    break;
-                case TransactionClass.CrcTrust:
-                    classification |= TransactionClass.CrcTrust;
-                    break;
-                case TransactionClass.CrcOrganisationSignup:
-                    classification |= TransactionClass.CrcOrganisationSignup;
-                    break;
-                case TransactionClass.CrcHubTransfer:
-                    classification |= TransactionClass.CrcHubTransfer;
-                    break;
-                case TransactionClass.SafeEthTransfer:
-                    classification |= TransactionClass.SafeEthTransfer;
-                    break;
-                case TransactionClass.EoaEthTransfer:
-                    classification |= TransactionClass.EoaEthTransfer;
-                    break;
-            }
-        }
-
-        return classification;
     }
 
     #region Default implementation
