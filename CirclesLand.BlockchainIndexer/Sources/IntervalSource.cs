@@ -40,7 +40,7 @@ namespace CirclesLand.BlockchainIndexer.Sources
 
                         if (lastBlock.Value == 0)
                         {
-                            lastBlock = new HexBigInteger(lastIndexedBlock == 0 ? Settings.StartFromBlock : lastIndexedBlock);
+                            lastBlock = new HexBigInteger(lastIndexedBlock == 0 ? SettingsValues.StartFromBlock : lastIndexedBlock);
                         }
 
                         if (currentBlock.ToLong() > lastIndexedBlock && currentBlock.Value > lastBlock.Value)

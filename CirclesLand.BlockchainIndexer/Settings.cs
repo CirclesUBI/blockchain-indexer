@@ -5,45 +5,8 @@ using Npgsql;
 
 namespace CirclesLand.BlockchainIndexer
 {
-    public static class Settings
+    public static class SettingsValues
     {
-        public static readonly string ConnectionString;
-        public static readonly string RpcEndpointUrl;
-        public static readonly string? RpcWsEndpointUrl;
-        public static readonly string WebsocketServerUrl;
-        
-        public static readonly int DelayStartup;
-
-        public static readonly long StartFromBlock;
-        public static readonly int UseBulkSourceThreshold;
-        /// <summary>
-        /// Specifies after how many imported blocks the import_from_staging_tables() procedure should be called.
-        /// </summary>
-        /// <remarks></remarks>
-        public static readonly int BulkFlushInterval;
-        public static readonly int BulkFlushTimeoutInSeconds;
-        public static readonly int SerialFlushInterval;
-        public static readonly int SerialFlushTimeoutInSeconds;
-
-        public static readonly int ErrorRestartPenaltyInMs;
-        public static readonly int MaxErrorRestartPenaltyInMs;
-        public static readonly int PollingIntervalInMs;
-
-        public static readonly int MaxParallelBlockDownloads;
-        public static readonly int MaxDownloadedBlockBufferSize;
-
-        public static readonly int MaxParallelReceiptDownloads;
-        public static readonly int MaxDownloadedTransactionsBufferSize;
-        public static readonly int MaxDownloadedReceiptsBufferSize;
-
-        public static readonly int WriteToStagingBatchSize;
-        public static readonly int WriteToStagingBatchMaxIntervalInSeconds;
-        public static readonly int MaxWriteToStagingBatchBufferSize;
-        
-        
-        public static readonly string HubAddress;
-        public static readonly string MultiSendContractAddress;
-        
         public static readonly string AddressEmptyBytesPrefix = "0x000000000000000000000000";
 
         public static readonly string CrcHubTransferEventTopic =
@@ -66,20 +29,54 @@ namespace CirclesLand.BlockchainIndexer
 
         public static readonly string ExecutionSuccessEventTopic =
             "0x442e715f626346e8c54381002da614f62bee8d27386535b2521ec8540898556e";
+        
+        public static string ConnectionString;
+        public static string RpcEndpointUrl;
+        public static string? RpcWsEndpointUrl;
+        public static string WebsocketServerUrl;
+        public static int DelayStartup;
+        public static long StartFromBlock;
+        public static int UseBulkSourceThreshold;
 
-        private static readonly Dictionary<string, string> InvalidSettings = new();
-        private static readonly Dictionary<string, (string, bool)> ValidSettings = new();
+        /// <summary>
+        /// Specifies after how many imported blocks the import_from_staging_tables() procedure should be called.
+        /// </summary>
+        /// <remarks></remarks>
+        public static int BulkFlushInterval;
 
+        public static int BulkFlushTimeoutInSeconds;
+        public static int SerialFlushInterval;
+        public static int SerialFlushTimeoutInSeconds;
+        public static int ErrorRestartPenaltyInMs;
+        public static int MaxErrorRestartPenaltyInMs;
+        public static int PollingIntervalInMs;
+        public static int MaxParallelBlockDownloads;
+        public static int MaxDownloadedBlockBufferSize;
+        public static int MaxParallelReceiptDownloads;
+        public static int MaxDownloadedTransactionsBufferSize;
+        public static int MaxDownloadedReceiptsBufferSize;
+        public static int WriteToStagingBatchSize;
+        public static int WriteToStagingBatchMaxIntervalInSeconds;
+        public static int MaxWriteToStagingBatchBufferSize;
+        public static string HubAddress;
+        public static string MultiSendContractAddress;
+        
+        public static readonly Dictionary<string, string> InvalidSettings = new();
+        public static readonly Dictionary<string, (string, bool)> ValidSettings = new();
+    }
+
+    public static class Settings
+    {
         static int TryGetIntEnvVar(string variableName, int defaultValue)
         {
             var val = Environment.GetEnvironmentVariable(variableName);
             var isInt = int.TryParse(val?.Trim(), out var i);
             if (val != null && !isInt)
             {
-                InvalidSettings.Add(variableName, val);
+                SettingsValues.InvalidSettings.Add(variableName, val);
             }
             var returnVal = isInt ? i : defaultValue;
-            ValidSettings.Add(variableName, (returnVal.ToString(), val == null));
+            SettingsValues.ValidSettings.Add(variableName, (returnVal.ToString(), val == null));
             return returnVal;
         }
 
@@ -87,7 +84,7 @@ namespace CirclesLand.BlockchainIndexer
         {
             var val = Environment.GetEnvironmentVariable(variableName);
             var returnVal = val ?? defaultValue;
-            ValidSettings.Add(variableName, (returnVal, val == null));
+            SettingsValues.ValidSettings.Add(variableName, (returnVal, val == null));
             return returnVal;
         }
 
@@ -97,10 +94,10 @@ namespace CirclesLand.BlockchainIndexer
             var isInt = long.TryParse(val?.Trim(), out var i);
             if (val != null && !isInt)
             {
-                InvalidSettings.Add(variableName, val);
+                SettingsValues.InvalidSettings.Add(variableName, val);
             }
             var returnVal = isInt ? i : defaultValue;
-            ValidSettings.Add(variableName, (returnVal.ToString(), val == null));
+            SettingsValues.ValidSettings.Add(variableName, (returnVal.ToString(), val == null));
             return returnVal;
         }
         
@@ -151,63 +148,63 @@ namespace CirclesLand.BlockchainIndexer
                 throw new ArgumentException(string.Join(Environment.NewLine, validationErrors));
             }
 
-            ConnectionString = connectionString ?? "null";
-            ValidSettings.Add("INDEXER_CONNECTION_STRING", ("hidden", false));
-            
-            RpcEndpointUrl = rpcGatewayUri?.ToString() ?? "null";
-            ValidSettings.Add("INDEXER_RPC_GATEWAY_URL", (RpcEndpointUrl, false));
-            
-            RpcWsEndpointUrl = rpcGatewayWsUri?.ToString() ?? "null";
-            ValidSettings.Add("INDEXER_RPC_GATEWAY_WS_URL", (RpcWsEndpointUrl, false));
-            
-            WebsocketServerUrl = websocketUrl?.ToString() ?? "null";
-            ValidSettings.Add("INDEXER_WEBSOCKET_URL", (WebsocketServerUrl, false));
-            
-            UseBulkSourceThreshold = TryGetIntEnvVar("USE_BULK_SOURCE_THRESHOLD", 24);
-            BulkFlushInterval = TryGetIntEnvVar("BULK_FLUSH_INTERVAL_IN_BLOCKS", 10);
-            BulkFlushTimeoutInSeconds = TryGetIntEnvVar("BULK_FLUSH_TIMEOUT_IN_SECONDS", 240);
-            SerialFlushInterval = TryGetIntEnvVar("SERIAL_FLUSH_INTERVAL_IN_BLOCKS",1 );
-            SerialFlushTimeoutInSeconds = TryGetIntEnvVar("SERIAL_FLUSH_TIMEOUT_IN_SECONDS", 10);
-            ErrorRestartPenaltyInMs = TryGetIntEnvVar("ERROR_RESTART_PENALTY_IN_MILLISECONDS", 1000 * 5);
-            MaxErrorRestartPenaltyInMs = TryGetIntEnvVar("MAX_ERROR_RESTART_PENALTY_IN_MILLISECONDS", 1000 * 60 * 4);
-            PollingIntervalInMs = TryGetIntEnvVar("POLLING_INTERVAL_IN_MILLISECONDS", 500);
-            MaxParallelBlockDownloads = TryGetIntEnvVar("MAX_PARALLEL_BLOCK_DOWNLOADS", 24);
-            MaxDownloadedBlockBufferSize = TryGetIntEnvVar("MAX_BLOCK_BUFFER_SIZE", MaxParallelBlockDownloads * 25);
-            MaxParallelReceiptDownloads = TryGetIntEnvVar("MAX_PARALLEL_RECEIPT_DOWNLOADS", 96);
-            MaxDownloadedTransactionsBufferSize = TryGetIntEnvVar("MAX_TRANSACTION_BUFFER_SIZE", MaxParallelReceiptDownloads * 25);
-            MaxDownloadedReceiptsBufferSize = TryGetIntEnvVar("MAX_RECEIPT_BUFFER_SIZE", 96 * 25);
-            WriteToStagingBatchSize = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_SIZE", 2000);
-            WriteToStagingBatchMaxIntervalInSeconds = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_MAX_INTERVAL_IN_SECONDS", 5);
-            MaxWriteToStagingBatchBufferSize = TryGetIntEnvVar("MAX_WRITE_TO_STAGING_BATCH_BUFFER_SIZE", 2048);
-            StartFromBlock = TryGetLongEnvVar("START_FROM_BLOCK", 12529458L);
-            HubAddress = TryGetStringEnvVar("HUB_ADDRESS", "0x29b9a7fbb8995b2423a71cc17cf9810798f6c543").ToLowerInvariant();
-            DelayStartup = TryGetIntEnvVar("DELAY_START", 0);
+            SettingsValues.ConnectionString = connectionString ?? "null";
+            SettingsValues.ValidSettings.Add("INDEXER_CONNECTION_STRING", ("hidden", false));
 
-            if (string.IsNullOrWhiteSpace(HubAddress))
+            SettingsValues.RpcEndpointUrl = rpcGatewayUri?.ToString() ?? "null";
+            SettingsValues.ValidSettings.Add("INDEXER_RPC_GATEWAY_URL", (SettingsValues.RpcEndpointUrl, false));
+
+            SettingsValues.RpcWsEndpointUrl = rpcGatewayWsUri?.ToString() ?? "null";
+            SettingsValues.ValidSettings.Add("INDEXER_RPC_GATEWAY_WS_URL", (SettingsValues.RpcWsEndpointUrl, false));
+
+            SettingsValues.WebsocketServerUrl = websocketUrl?.ToString() ?? "null";
+            SettingsValues.ValidSettings.Add("INDEXER_WEBSOCKET_URL", (SettingsValues.WebsocketServerUrl, false));
+
+            SettingsValues.UseBulkSourceThreshold = TryGetIntEnvVar("USE_BULK_SOURCE_THRESHOLD", 24);
+            SettingsValues.BulkFlushInterval = TryGetIntEnvVar("BULK_FLUSH_INTERVAL_IN_BLOCKS", 10);
+            SettingsValues.BulkFlushTimeoutInSeconds = TryGetIntEnvVar("BULK_FLUSH_TIMEOUT_IN_SECONDS", 240);
+            SettingsValues.SerialFlushInterval = TryGetIntEnvVar("SERIAL_FLUSH_INTERVAL_IN_BLOCKS",1 );
+            SettingsValues.SerialFlushTimeoutInSeconds = TryGetIntEnvVar("SERIAL_FLUSH_TIMEOUT_IN_SECONDS", 10);
+            SettingsValues.ErrorRestartPenaltyInMs = TryGetIntEnvVar("ERROR_RESTART_PENALTY_IN_MILLISECONDS", 1000 * 5);
+            SettingsValues.MaxErrorRestartPenaltyInMs = TryGetIntEnvVar("MAX_ERROR_RESTART_PENALTY_IN_MILLISECONDS", 1000 * 60 * 4);
+            SettingsValues.PollingIntervalInMs = TryGetIntEnvVar("POLLING_INTERVAL_IN_MILLISECONDS", 500);
+            SettingsValues.MaxParallelBlockDownloads = TryGetIntEnvVar("MAX_PARALLEL_BLOCK_DOWNLOADS", 24);
+            SettingsValues.MaxDownloadedBlockBufferSize = TryGetIntEnvVar("MAX_BLOCK_BUFFER_SIZE", SettingsValues.MaxParallelBlockDownloads * 25);
+            SettingsValues.MaxParallelReceiptDownloads = TryGetIntEnvVar("MAX_PARALLEL_RECEIPT_DOWNLOADS", 96);
+            SettingsValues.MaxDownloadedTransactionsBufferSize = TryGetIntEnvVar("MAX_TRANSACTION_BUFFER_SIZE", SettingsValues.MaxParallelReceiptDownloads * 25);
+            SettingsValues.MaxDownloadedReceiptsBufferSize = TryGetIntEnvVar("MAX_RECEIPT_BUFFER_SIZE", 96 * 25);
+            SettingsValues.WriteToStagingBatchSize = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_SIZE", 2000);
+            SettingsValues.WriteToStagingBatchMaxIntervalInSeconds = TryGetIntEnvVar("WRITE_TO_STAGING_BATCH_MAX_INTERVAL_IN_SECONDS", 5);
+            SettingsValues.MaxWriteToStagingBatchBufferSize = TryGetIntEnvVar("MAX_WRITE_TO_STAGING_BATCH_BUFFER_SIZE", 2048);
+            SettingsValues.StartFromBlock = TryGetLongEnvVar("START_FROM_BLOCK", 12529458L);
+            SettingsValues.HubAddress = TryGetStringEnvVar("HUB_ADDRESS", "0x29b9a7fbb8995b2423a71cc17cf9810798f6c543").ToLowerInvariant();
+            SettingsValues.DelayStartup = TryGetIntEnvVar("DELAY_START", 0);
+
+            if (string.IsNullOrWhiteSpace(SettingsValues.HubAddress))
             {
                 throw new Exception("Cannot start without a valid configured HUB_ADDRESS.");
             }
 
-            MultiSendContractAddress = TryGetStringEnvVar("MULTI_SEND_ADDRESS", "");
+            SettingsValues.MultiSendContractAddress = TryGetStringEnvVar("MULTI_SEND_ADDRESS", "");
             
 
             Console.WriteLine("Configuration: ");
             Console.WriteLine("-------------------------------------------");
-            foreach (var (key, value) in InvalidSettings)
+            foreach (var (key, value) in SettingsValues.InvalidSettings)
             {
                 Console.WriteLine($"ERR: The value of environment variable '{key}' is invalid: {value}");
             }
 
-            if (InvalidSettings.Count > 0)
+            if (SettingsValues.InvalidSettings.Count > 0)
             {
                 Console.WriteLine("-------------------------------------------");
                 throw new Exception("Invalid configuration");
             }
             
-            var col1Width =  ValidSettings.Select(o => o.Key).Max(o => o.Length) + 2;
-            var col2Width =  ValidSettings.Select(o => o.Value.Item1).Max(o => o.Length) + 2;
+            var col1Width = SettingsValues.ValidSettings.Select(o => o.Key).Max(o => o.Length) + 2;
+            var col2Width = SettingsValues.ValidSettings.Select(o => o.Value.Item1).Max(o => o.Length) + 2;
             
-            foreach (var (key, value) in ValidSettings)
+            foreach (var (key, value) in SettingsValues.ValidSettings)
             {
                 var formattedKey = (key + ": ").PadRight(col1Width);
                 var formattedVal = value.Item1.PadRight(col2Width);

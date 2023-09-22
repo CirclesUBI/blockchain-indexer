@@ -46,19 +46,18 @@ namespace CirclesLand.BlockchainIndexer.Persistence
                 });
         }
 
-        public static void InsertEmptyBlock(NpgsqlConnection writerConnection, BlockWithTransactions block)
+        public static void InsertEmptyBlock(NpgsqlConnection writerConnection, long blockTimestamp, long blockNumber, string blockHash)
         {
-            var blockTimestamp = block.Timestamp.ToLong();
             var blockTimestampDateTime =
                 DateTimeOffset.FromUnixTimeSeconds(blockTimestamp).UtcDateTime;
 
             writerConnection.Execute($@"
-                                    insert into _block_staging (number, hash, timestamp, total_transaction_count)
+                                    insert into {TransactionsWriter.blockTableName} (number, hash, timestamp, total_transaction_count)
                                     values (@number, @hash, @timestamp, 0);",
                 new
                 {
-                    number = block.Number.ToLong(),
-                    hash = block.BlockHash,
+                    number = blockNumber,
+                    hash = blockHash,
                     timestamp = blockTimestampDateTime
                 });
 

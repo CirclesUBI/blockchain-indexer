@@ -13,12 +13,12 @@ namespace CirclesLand.BlockchainIndexer.DetailExtractors
         {
             var log = receipt.Logs
                 .FirstOrDefault(o =>
-                    TransactionClassifier.GetTopics(o).Contains(Settings.CrcTrustEventTopic));
+                    TransactionClassifier.GetTopics(o).Contains(SettingsValues.CrcTrustEventTopic));
 
             if (log == null)
             {
                 throw new Exception("The supplied transaction is not a valid CRC 'trust' transaction because " +
-                                    $"it misses a log entry with topic {Settings.CrcTrustEventTopic}.");
+                                    $"it misses a log entry with topic {SettingsValues.CrcTrustEventTopic}.");
             }
 
             var isCrcTrust = TransactionClassifier.IsCrcTrust(

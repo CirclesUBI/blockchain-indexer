@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net7.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.Data.Sqlite" Version="7.0.11" />
+      <PackageReference Include="Nethermind.Numerics.Int256" Version="1.1.0" />
+      <PackageReference Include="Nethermind.ReferenceAssemblies" Version="1.20.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\CirclesLand.BlockchainIndexer\CirclesLand.BlockchainIndexer.csproj" />
+    </ItemGroup>
+
+</Project>

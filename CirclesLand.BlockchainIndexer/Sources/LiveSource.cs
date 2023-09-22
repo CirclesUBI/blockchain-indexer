@@ -39,7 +39,7 @@ public static class LiveSource
                     if (lastBlock.Value == 0)
                     {
                         lastBlock = new HexBigInteger(
-                            lastPersistedBlock == 0 ? Settings.StartFromBlock : lastPersistedBlock);
+                            lastPersistedBlock == 0 ? SettingsValues.StartFromBlock : lastPersistedBlock);
                     }
 
                     if (mostRecentBlock.ToLong() > lastPersistedBlock && mostRecentBlock.Value > lastBlock.Value)
@@ -66,7 +66,7 @@ public static class LiveSource
             
             await dbConnection.CloseAsync();
             
-            using var client = new StreamingWebSocketClient(Settings.RpcWsEndpointUrl);
+            using var client = new StreamingWebSocketClient(SettingsValues.RpcWsEndpointUrl);
             var subscription = new EthNewBlockHeadersSubscription(client);
             
             var completionSource = new TaskCompletionSource<HexBigInteger>(TaskCreationOptions.None);

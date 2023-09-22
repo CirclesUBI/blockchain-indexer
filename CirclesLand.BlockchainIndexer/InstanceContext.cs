@@ -11,7 +11,7 @@ namespace CirclesLand.BlockchainIndexer
 
         private NpgsqlConnection GetConnection()
         {
-            return new(Settings.ConnectionString);
+            return new(SettingsValues.ConnectionString);
         }
 
         public RoundContext CreateRoundContext()
@@ -21,10 +21,10 @@ namespace CirclesLand.BlockchainIndexer
             
             var roundNo = Interlocked.Increment(ref Statistics.TotalStartedRounds);
 
-            var penalty = Settings.ErrorRestartPenaltyInMs *
+            var penalty = SettingsValues.ErrorRestartPenaltyInMs *
                           (Statistics.ImmediateErrorCount * Statistics.ImmediateErrorCount);
-            penalty = penalty > Settings.MaxErrorRestartPenaltyInMs
-                ? Settings.MaxErrorRestartPenaltyInMs
+            penalty = penalty > SettingsValues.MaxErrorRestartPenaltyInMs
+                ? SettingsValues.MaxErrorRestartPenaltyInMs
                 : penalty;
 
             var round = new RoundContext(roundNo, connection, TimeSpan.FromMilliseconds(penalty));
